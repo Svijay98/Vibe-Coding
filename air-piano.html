@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Air Piano — Hand Tracking</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #13131c;
+      --surface2: #1c1c2a;
+      --border: rgba(255,255,255,0.08);
+      --border-bright: rgba(255,255,255,0.18);
+      --accent: #00e5a0;
+      --accent2: #4d9fff;
+      --accent3: #ff6b6b;
+      --text: #f0f0f0;
+      --text-muted: #888;
+      --text-dim: #444;
+      --font-mono: 'Space Mono', monospace;
+      --font-sans: 'DM Sans', sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 40% at 20% 10%, rgba(0,229,160,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 35% at 80% 80%, rgba(77,159,255,0.06) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 24px 20px 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .logo-tag {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--accent);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+    .logo-title {
+      font-size: 28px;
+      font-weight: 300;
+      letter-spacing: -0.5px;
+      color: var(--text);
+    }
+    .logo-title span { font-weight: 500; color: var(--accent); }
+    .status-pills {
+      display: flex;
+      gap: 8px;
+    }
+    .pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      transition: all 0.3s;
+    }
+    .pill .led {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      transition: all 0.3s;
+    }
+    .pill.on { border-color: rgba(0,229,160,0.3); color: var(--accent); }
+    .pill.on .led { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+    .pill.hand-on { border-color: rgba(77,159,255,0.3); color: var(--accent2); }
+    .pill.hand-on .led { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+
+    /* Main layout */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      gap: 16px;
+    }
+    @media (max-width: 700px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Camera */
+    .cam-wrap {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #060608;
+      border: 1px solid var(--border);
+      aspect-ratio: 4/3;
+    }
+    #video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transform: scaleX(-1);
+    }
+    #canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      transform: scaleX(-1);
+    }
+    .cam-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: var(--text-dim);
+      font-size: 13px;
+      font-family: var(--font-mono);
+    }
+    .cam-icon {
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+
+    /* Side panel */
+    .side-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .panel-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .panel-card h3 {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    /* Note display */
+    .note-big {
+      font-family: var(--font-mono);
+      font-size: 52px;
+      font-weight: 700;
+      color: var(--accent);
+      line-height: 1;
+      text-shadow: 0 0 30px rgba(0,229,160,0.4);
+      transition: all 0.1s;
+    }
+    .note-big.silent { color: var(--text-dim); text-shadow: none; }
+    .note-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      margin-top: 4px;
+    }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .stat {
+      background: var(--surface2);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .stat-label { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); margin-bottom: 4px; }
+    .stat-val { font-size: 20px; font-weight: 500; font-family: var(--font-mono); color: var(--text); }
+
+    /* Controls */
+    .ctrl-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .ctrl-label { font-size: 12px; color: var(--text-muted); }
+    .ctrl-val { font-size: 12px; font-family: var(--font-mono); color: var(--text); }
+    .oct-btns { display: flex; gap: 6px; align-items: center; }
+    .oct-btn {
+      width: 26px; height: 26px;
+      border-radius: 6px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .oct-btn:hover { background: var(--border); border-color: var(--border-bright); }
+    .oct-num { font-family: var(--font-mono); font-size: 16px; min-width: 16px; text-align: center; }
+
+    input[type=range] {
+      width: 100%;
+      appearance: none;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--surface2);
+      outline: none;
+      margin: 6px 0;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(0,229,160,0.5);
+    }
+    input[type=range].blue-slider::-webkit-slider-thumb { background: var(--accent2); box-shadow: 0 0 8px rgba(77,159,255,0.5); }
+
+    /* Start button */
+    #start-btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--accent);
+      background: rgba(0,229,160,0.08);
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: all 0.2s;
+    }
+    #start-btn:hover { background: rgba(0,229,160,0.15); box-shadow: 0 0 16px rgba(0,229,160,0.2); }
+    #start-btn.running { border-color: var(--accent3); background: rgba(255,107,107,0.08); color: var(--accent3); }
+    #start-btn.running:hover { background: rgba(255,107,107,0.15); }
+    #start-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Piano keys */
+    .piano-section { }
+    .piano-section h3 {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .piano-keys {
+      display: flex;
+      gap: 4px;
+      height: 72px;
+      align-items: flex-end;
+    }
+    .key {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 0 0 6px 6px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      padding-bottom: 6px;
+      transition: all 0.08s;
+      position: relative;
+      min-width: 0;
+    }
+    .key:hover { background: var(--surface); border-color: var(--border-bright); }
+    .key-label {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      user-select: none;
+    }
+    .key.lit-green { background: rgba(0,229,160,0.2); border-color: var(--accent); }
+    .key.lit-green .key-label { color: var(--accent); }
+    .key.lit-blue { background: rgba(77,159,255,0.25); border-color: var(--accent2); }
+    .key.lit-blue .key-label { color: var(--accent2); }
+    .key .finger-badge {
+      position: absolute;
+      top: 6px;
+      font-size: 9px;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+    }
+
+    /* Gesture guide */
+    .gesture-guide {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .gesture-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--surface2);
+    }
+    .gesture-icon {
+      font-size: 18px;
+      width: 28px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .gesture-text { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+    .gesture-text strong { color: var(--text); font-weight: 500; }
+
+    /* Pinch indicator */
+    .pinch-ring {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.1s;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+    }
+    .pinch-ring.active {
+      border-color: var(--accent2);
+      box-shadow: 0 0 12px rgba(77,159,255,0.4);
+      color: var(--accent2);
+      background: rgba(77,159,255,0.1);
+    }
+
+    .bottom-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 8px;
+    }
+    .credit {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+    }
+    .waveform {
+      display: flex;
+      gap: 3px;
+      align-items: center;
+      height: 20px;
+    }
+    .bar {
+      width: 3px;
+      background: var(--accent);
+      border-radius: 2px;
+      opacity: 0.4;
+      animation: wave 1.2s ease-in-out infinite;
+    }
+    .bar:nth-child(1) { animation-delay: 0s; height: 6px; }
+    .bar:nth-child(2) { animation-delay: 0.15s; height: 12px; }
+    .bar:nth-child(3) { animation-delay: 0.3s; height: 18px; }
+    .bar:nth-child(4) { animation-delay: 0.15s; height: 12px; }
+    .bar:nth-child(5) { animation-delay: 0s; height: 6px; }
+    .waveform.playing .bar { opacity: 1; }
+    @keyframes wave {
+      0%, 100% { transform: scaleY(0.5); }
+      50% { transform: scaleY(1); }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <span class="logo-tag">Hand Tracking Instrument</span>
+      <h1 class="logo-title">Air <span>Piano</span></h1>
+    </div>
+    <div class="status-pills">
+      <div class="pill" id="cam-pill"><span class="led"></span>camera</div>
+      <div class="pill" id="hand-pill"><span class="led"></span>hand</div>
+    </div>
+  </div>
+
+  <!-- Main grid -->
+  <div class="main-grid">
+
+    <!-- Camera feed -->
+    <div>
+      <div class="cam-wrap">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="canvas"></canvas>
+        <div class="cam-placeholder" id="placeholder">
+          <div class="cam-icon">◉</div>
+          <span>camera inactive</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Side panel -->
+    <div class="side-panel">
+
+      <!-- Current note -->
+      <div class="panel-card">
+        <h3>Now Playing</h3>
+        <div class="note-big silent" id="note-display">—</div>
+        <div class="note-sub" id="note-sub">raise a finger to begin</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;">
+          <div class="waveform" id="waveform">
+            <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+          </div>
+          <div class="pinch-ring" id="pinch-ring">✦</div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="panel-card">
+        <h3>Hand Data</h3>
+        <div class="stats-grid">
+          <div class="stat"><div class="stat-label">fingers</div><div class="stat-val" id="finger-count">—</div></div>
+          <div class="stat"><div class="stat-label">height</div><div class="stat-val" id="hand-height">—</div></div>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="panel-card">
+        <h3>Controls</h3>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Octave</span>
+          <div class="oct-btns">
+            <button class="oct-btn" onclick="changeOctave(-1)">−</button>
+            <span class="oct-num" id="octave-val">4</span>
+            <button class="oct-btn" onclick="changeOctave(1)">+</button>
+          </div>
+        </div>
+        <div class="ctrl-row" style="margin-bottom:4px;">
+          <span class="ctrl-label">Volume</span>
+          <span class="ctrl-val" id="vol-val">70%</span>
+        </div>
+        <input type="range" min="0" max="100" value="70" id="vol-slider" oninput="onVolume(this.value)" />
+        <div class="ctrl-row" style="margin-top:10px;margin-bottom:4px;">
+          <span class="ctrl-label">Reverb</span>
+          <span class="ctrl-val" id="rev-val">30%</span>
+        </div>
+        <input type="range" class="blue-slider" min="0" max="100" value="30" id="rev-slider" oninput="onReverb(this.value)" />
+        <button id="start-btn" onclick="toggleCamera()" style="margin-top:12px;">▶ START CAMERA</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Piano keys -->
+  <div class="piano-section">
+    <h3>Piano — click to test / gesture to play</h3>
+    <div class="piano-keys" id="piano-keys"></div>
+  </div>
+
+  <!-- Gesture guide -->
+  <div class="panel-card">
+    <h3>Gesture Guide</h3>
+    <div class="gesture-guide">
+      <div class="gesture-row">
+        <div class="gesture-icon">✋</div>
+        <div class="gesture-text"><strong>1–5 fingers</strong> → C D E F G — the number of raised fingers selects the note</div>
+      </div>
+      <div class="gesture-row">
+        <div class="gesture-icon">↕</div>
+        <div class="gesture-text"><strong>Hand height</strong> → upper half of frame shifts octave up by 1; lower half shifts down by 1</div>
+      </div>
+      <div class="gesture-row">
+        <div class="gesture-icon">🤌</div>
+        <div class="gesture-text"><strong>Pinch</strong> (thumb + index close together) → triggers the selected note to play</div>
+      </div>
+      <div class="gesture-row">
+        <div class="gesture-icon">💡</div>
+        <div class="gesture-text"><strong>Tips:</strong> good lighting + plain background = best tracking. Keep hand centred in frame.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-row">
+    <span class="credit">air-piano.html — offline / standalone</span>
+  </div>
+
+</div>
+
+<!-- MediaPipe -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+
+<script>
+/* ─── Audio Engine ─── */
+let audioCtx = null, masterGain = null, reverbNode = null, reverbGain = null, dryGain = null;
+let reverbAmount = 0.3;
+
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.7;
+
+  dryGain = audioCtx.createGain();
+  dryGain.gain.value = 0.7;
+
+  reverbGain = audioCtx.createGain();
+  reverbGain.gain.value = reverbAmount;
+
+  // Simple convolver reverb via noise buffer
+  const len = audioCtx.sampleRate * 2;
+  const buf = audioCtx.createBuffer(2, len, audioCtx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+  }
+  reverbNode = audioCtx.createConvolver();
+  reverbNode.buffer = buf;
+
+  dryGain.connect(masterGain);
+  reverbGain.connect(reverbNode);
+  reverbNode.connect(masterGain);
+  masterGain.connect(audioCtx.destination);
+}
+
+const NOTE_NAMES = ['C','D','E','F','G','A','B'];
+const NOTE_SEMITONES = [0,2,4,5,7,9,11];
+
+function noteFreq(note, oct) {
+  const semi = NOTE_SEMITONES[NOTE_NAMES.indexOf(note)];
+  const midi = (oct + 1) * 12 + semi;
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function playNote(note, oct) {
+  initAudio();
+  const freq = noteFreq(note, oct);
+  const osc = audioCtx.createOscillator();
+  const osc2 = audioCtx.createOscillator();
+  const gainNode = audioCtx.createGain();
+  osc.type = 'triangle';
+  osc2.type = 'sine';
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  osc2.frequency.setValueAtTime(freq * 2.001, audioCtx.currentTime);
+  const g2 = audioCtx.createGain(); g2.gain.value = 0.3;
+  gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+  gainNode.gain.linearRampToValueAtTime(0.55, audioCtx.currentTime + 0.008);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.6);
+  osc.connect(gainNode); osc2.connect(g2); g2.connect(gainNode);
+  gainNode.connect(dryGain);
+  gainNode.connect(reverbGain);
+  osc.start(); osc2.start();
+  osc.stop(audioCtx.currentTime + 1.7);
+  osc2.stop(audioCtx.currentTime + 1.7);
+  pulseWaveform();
+}
+
+/* ─── State ─── */
+let octave = 4;
+let cameraRunning = false;
+let mpCamera = null;
+let pinchActive = false;
+const FINGER_NOTES = [null,'C','D','E','F','G'];
+
+/* ─── UI helpers ─── */
+function pulseWaveform() {
+  const w = document.getElementById('waveform');
+  w.classList.add('playing');
+  clearTimeout(w._t);
+  w._t = setTimeout(() => w.classList.remove('playing'), 800);
+}
+
+function setNoteDisplay(note, oct, sub) {
+  const el = document.getElementById('note-display');
+  el.textContent = note ? note + oct : '—';
+  el.classList.toggle('silent', !note);
+  document.getElementById('note-sub').textContent = sub || '';
+}
+
+function flashKey(noteStr, color) {
+  const k = document.getElementById('key-' + noteStr);
+  if (!k) return;
+  k.classList.add(color === 'blue' ? 'lit-blue' : 'lit-green');
+  clearTimeout(k._t);
+  k._t = setTimeout(() => { k.classList.remove('lit-green','lit-blue'); }, 350);
+}
+
+/* ─── Build piano ─── */
+function buildPiano() {
+  const wrap = document.getElementById('piano-keys');
+  wrap.innerHTML = '';
+  FINGER_NOTES.slice(1).forEach((note, i) => {
+    const div = document.createElement('div');
+    div.className = 'key';
+    div.id = 'key-' + note;
+    div.innerHTML = `<span class="finger-badge">${i+1}</span><span class="key-label">${note}</span>`;
+    div.addEventListener('click', () => { initAudio(); playNote(note, octave); flashKey(note); setNoteDisplay(note, octave, 'clicked'); });
+    wrap.appendChild(div);
+  });
+}
+
+/* ─── Hand tracking ─── */
+function countFingers(lm) {
+  let count = 0;
+  [[8,6],[12,10],[16,14],[20,18]].forEach(([tip,base]) => {
+    if (lm[tip].y < lm[base].y) count++;
+  });
+  if (Math.abs(lm[4].x - lm[2].x) > 0.05) count++;
+  return Math.min(count, 5);
+}
+
+function isPinch(lm) {
+  const dx = lm[4].x - lm[8].x, dy = lm[4].y - lm[8].y;
+  return Math.sqrt(dx*dx + dy*dy) < 0.06;
+}
+
+function onResults(results) {
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const handPill = document.getElementById('hand-pill');
+
+  if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+    handPill.className = 'pill';
+    document.getElementById('finger-count').textContent = '—';
+    document.getElementById('hand-height').textContent = '—';
+    setNoteDisplay(null, octave, 'show your hand');
+    pinchActive = false;
+    document.getElementById('pinch-ring').classList.remove('active');
+    return;
+  }
+
+  handPill.className = 'pill hand-on';
+  const lm = results.multiHandLandmarks[0];
+
+  // Draw skeleton
+  if (typeof drawConnectors !== 'undefined') {
+    drawConnectors(ctx, lm, HAND_CONNECTIONS, { color: 'rgba(0,229,160,0.5)', lineWidth: 2 });
+    drawLandmarks(ctx, lm, { color: '#00e5a0', lineWidth: 1, radius: 3 });
+  }
+
+  const fingers = countFingers(lm);
+  const height = 1 - lm[0].y;
+  const pinch = isPinch(lm);
+  const note = FINGER_NOTES[fingers];
+  const heightShift = height > 0.62 ? 1 : height < 0.32 ? -1 : 0;
+  const safeOct = Math.max(2, Math.min(6, octave + heightShift));
+
+  document.getElementById('finger-count').textContent = fingers || '0';
+  document.getElementById('hand-height').textContent = Math.round(height * 100) + '%';
+  document.getElementById('pinch-ring').classList.toggle('active', pinch);
+
+  if (note) {
+    setNoteDisplay(note, safeOct, pinch ? '✦ pinch — playing' : fingers + ' finger' + (fingers>1?'s':'') + ' — hover');
+    if (pinch && !pinchActive) {
+      pinchActive = true;
+      playNote(note, safeOct);
+      flashKey(note, 'blue');
+    }
+    if (!pinch) {
+      pinchActive = false;
+      flashKey(note, 'green');
+    }
+  } else {
+    setNoteDisplay(null, safeOct, 'raise 1–5 fingers');
+    pinchActive = false;
+  }
+
+  // Draw pinch indicator on canvas
+  const tx = (1 - ((lm[4].x + lm[8].x) / 2)) * canvas.width;
+  const ty = ((lm[4].y + lm[8].y) / 2) * canvas.height;
+  ctx.beginPath();
+  ctx.arc(tx, ty, pinch ? 16 : 11, 0, Math.PI * 2);
+  ctx.strokeStyle = pinch ? '#4d9fff' : '#00e5a0';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  if (pinch) { ctx.fillStyle = 'rgba(77,159,255,0.2)'; ctx.fill(); }
+
+  if (note) {
+    const wx = (1 - lm[0].x) * canvas.width;
+    const wy = lm[0].y * canvas.height;
+    ctx.font = 'bold 18px Space Mono, monospace';
+    ctx.fillStyle = '#00e5a0';
+    ctx.shadowColor = '#00e5a0'; ctx.shadowBlur = 8;
+    ctx.fillText(note + safeOct, wx - 10, wy - 18);
+    ctx.shadowBlur = 0;
+  }
+}
+
+/* ─── Camera ─── */
+async function toggleCamera() {
+  const btn = document.getElementById('start-btn');
+  const camPill = document.getElementById('cam-pill');
+  const placeholder = document.getElementById('placeholder');
+
+  if (cameraRunning) {
+    if (mpCamera) mpCamera.stop();
+    cameraRunning = false;
+    btn.textContent = '▶ START CAMERA';
+    btn.classList.remove('running');
+    camPill.className = 'pill';
+    placeholder.style.display = 'flex';
+    return;
+  }
+
+  btn.textContent = '⟳ STARTING...';
+  btn.disabled = true;
+
+  try {
+    initAudio();
+    const video = document.getElementById('video');
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 } });
+    video.srcObject = stream;
+    await video.play();
+    placeholder.style.display = 'none';
+
+    const hands = new Hands({
+      locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+    });
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.5 });
+    hands.onResults(onResults);
+
+    mpCamera = new Camera(video, {
+      onFrame: async () => { await hands.send({ image: video }); },
+      width: 640, height: 480
+    });
+    mpCamera.start();
+
+    cameraRunning = true;
+    btn.textContent = '■ STOP CAMERA';
+    btn.classList.add('running');
+    btn.disabled = false;
+    camPill.className = 'pill on';
+  } catch(e) {
+    btn.textContent = '▶ START CAMERA';
+    btn.disabled = false;
+    alert('Could not access camera.\n\nPlease:\n1. Allow camera permissions in your browser\n2. Make sure no other app is using the camera\n3. Use Chrome or Edge for best MediaPipe support');
+  }
+}
+
+/* ─── Controls ─── */
+function changeOctave(delta) {
+  octave = Math.max(2, Math.min(6, octave + delta));
+  document.getElementById('octave-val').textContent = octave;
+}
+
+function onVolume(val) {
+  initAudio();
+  masterGain.gain.value = val / 100;
+  document.getElementById('vol-val').textContent = val + '%';
+}
+
+function onReverb(val) {
+  reverbAmount = val / 100;
+  document.getElementById('rev-val').textContent = val + '%';
+  if (reverbGain) { reverbGain.gain.value = reverbAmount; dryGain.gain.value = 1 - reverbAmount * 0.5; }
+}
+
+/* ─── Init ─── */
+buildPiano();
+</script>
+</body>
+</html>
