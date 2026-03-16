@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bangalore Outbreak Simulation — War Room</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 16px; }
+  h1 { font-size: 18px; font-weight: 600; color: #f1f5f9; margin-bottom: 12px; }
+  h1 span { font-size: 12px; font-weight: 400; color: #64748b; margin-left: 8px; }
+
+  /* ── PARAMETER PANEL ── */
+  #params { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .param-group { display: flex; flex-direction: column; gap: 4px; }
+  .param-group label { font-size: 11px; color: #94a3b8; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+  .param-group select, .param-group input[type=range] { background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; padding: 4px 8px; font-size: 12px; width: 100%; }
+  .param-group .val { font-size: 12px; color: #38bdf8; font-weight: 600; }
+  .param-group input[type=range] { accent-color: #38bdf8; padding: 0; }
+
+  /* ── CONTROLS ── */
+  #controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  button { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; transition: background 0.15s; }
+  button:hover { background: #334155; }
+  button.primary { background: #0369a1; border-color: #0ea5e9; }
+  button.primary:hover { background: #0284c7; }
+  #dayLabel { font-size: 13px; font-weight: 600; color: #38bdf8; margin-left: 4px; }
+
+  /* ── DAY JUMP ── */
+  #daybar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .daybtn { padding: 3px 10px; font-size: 11px; border-radius: 5px; border: 1px solid #334155; background: #1e293b; color: #94a3b8; cursor: pointer; }
+  .daybtn.active { background: #7f1d1d; color: #fca5a5; border-color: #dc2626; font-weight: 600; }
+
+  /* ── STATS ── */
+  #statsrow, #statsrow2 { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+  .stcard { background: #1e293b; border-radius: 6px; padding: 3px 10px; font-size: 11px; border: 1px solid #334155; }
+  .stcard span { font-weight: 600; }
+  .stcard.green span { color: #4ade80; }
+  .stcard.yellow span { color: #facc15; }
+  .stcard.orange span { color: #fb923c; }
+  .stcard.red span { color: #f87171; }
+  .stcard.blue span { color: #60a5fa; }
+  .stcard.cyan span { color: #22d3ee; }
+
+  /* ── HOSPITAL BAR ── */
+  #hbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; align-items: center; font-size: 11px; color: #64748b; }
+  .hpill { border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 600; }
+
+  /* ── EVENT LOG ── */
+  #eventlog { background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; font-size: 11px; color: #94a3b8; height: 38px; overflow: hidden; margin-bottom: 8px; line-height: 1.6; }
+
+  /* ── LEGEND ── */
+  #legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: #94a3b8; margin-bottom: 8px; }
+  .leg { display: flex; align-items: center; gap: 4px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+  canvas { display: block; border-radius: 8px; border: 1px solid #334155; width: 100%; max-width: 800px; }
+
+  /* ── PARAM NOTES ── */
+  #notes { margin-top: 12px; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; font-size: 11px; color: #64748b; line-height: 1.7; }
+  #notes h3 { color: #94a3b8; font-size: 12px; margin-bottom: 6px; }
+  #notes code { background: #0f172a; padding: 1px 5px; border-radius: 3px; color: #38bdf8; font-family: monospace; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<h1>Bangalore Outbreak Simulation <span>War Room — v1.0</span></h1>
+
+<!-- ═══════════════════════════════════════════════
+     PARAMETER PANEL — edit these to change the sim
+     ═══════════════════════════════════════════════ -->
+<div id="params">
+  <div class="param-group">
+    <label>Pathogen Type</label>
+    <select id="pType" onchange="resetSim()">
+      <option value="water">💧 Waterborne (cholera-type)</option>
+      <option value="air">💨 Airborne (flu/COVID-type)</option>
+      <option value="both">☣️ Combined outbreak</option>
+    </select>
+  </div>
+  <div class="param-group">
+    <label>Govt Response</label>
+    <select id="govtLevel" onchange="resetSim()">
+      <option value="weak">❌ Collapsed / absent</option>
+      <option value="partial">⚠️ Partial / delayed</option>
+      <option value="strong">✅ Functional (baseline)</option>
+    </select>
+  </div>
+  <div class="param-group">
+    <label>Base Transmission Rate <span class="val" id="vTransmit">0.35%</span></label>
+    <input type="range" id="transmitRate" min="1" max="100" value="35"
+           oninput="document.getElementById('vTransmit').textContent=(this.value/100).toFixed(2)+'%'">
+  </div>
+  <div class="param-group">
+    <label>Poor Zone Multiplier <span class="val" id="vPoorMult">2.5×</span></label>
+    <input type="range" id="poorMult" min="10" max="50" value="25"
+           oninput="document.getElementById('vPoorMult').textContent=(this.value/10).toFixed(1)+'×'">
+  </div>
+  <div class="param-group">
+    <label>Hospital Debt Barrier <span class="val" id="vDebt">70%</span></label>
+    <input type="range" id="debtBarrier" min="0" max="100" value="70"
+           oninput="document.getElementById('vDebt').textContent=this.value+'%'">
+  </div>
+  <div class="param-group">
+    <label>Initial Med Supply <span class="val" id="vMed">100%</span></label>
+    <input type="range" id="initMed" min="10" max="100" value="100"
+           oninput="document.getElementById('vMed').textContent=this.value+'%'">
+  </div>
+  <div class="param-group">
+    <label>Initial Food Supply <span class="val" id="vFood">100%</span></label>
+    <input type="range" id="initFood" min="10" max="100" value="100"
+           oninput="document.getElementById('vFood').textContent=this.value+'%'">
+  </div>
+  <div class="param-group">
+    <label>Private Hosp Surge Cost <span class="val" id="vSurge">1.0×</span></label>
+    <input type="range" id="surgeCost" min="10" max="50" value="10"
+           oninput="document.getElementById('vSurge').textContent=(this.value/10).toFixed(1)+'×'">
+  </div>
+  <div class="param-group">
+    <label>Vaccine Coverage (rich) <span class="val" id="vVax">40%</span></label>
+    <input type="range" id="vaxRich" min="0" max="100" value="40"
+           oninput="document.getElementById('vVax').textContent=this.value+'%'">
+  </div>
+  <div class="param-group">
+    <label>Vaccine Coverage (poor) <span class="val" id="vVaxPoor">5%</span></label>
+    <input type="range" id="vaxPoor" min="0" max="50" value="5"
+           oninput="document.getElementById('vVaxPoor').textContent=this.value+'%'">
+  </div>
+  <div class="param-group">
+    <label>Population (×100) <span class="val" id="vPop">100</span></label>
+    <input type="range" id="popSize" min="20" max="100" value="100"
+           oninput="document.getElementById('vPop').textContent=this.value">
+  </div>
+  <div class="param-group">
+    <label>Simulation Speed <span class="val" id="vSpeed">6×</span></label>
+    <input type="range" id="simSpeed" min="1" max="20" value="6"
+           oninput="document.getElementById('vSpeed').textContent=this.value+'×'">
+  </div>
+</div>
+
+<div id="controls">
+  <button class="primary" onclick="resetSim()">↺ Restart</button>
+  <button onclick="togglePause()" id="pauseBtn">⏸ Pause</button>
+  <button onclick="stepDay(1)">+1 Day</button>
+  <button onclick="stepDay(3)">+3 Days</button>
+  <button onclick="stepDay(7)">+1 Week</button>
+  <span id="dayLabel">Day 1 — 00:00</span>
+</div>
+
+<div id="daybar">
+  <span style="font-size:11px;color:#64748b">Jump to:</span>
+  <button class="daybtn active" onclick="jumpDay(0)" id="db0">Day 1</button>
+  <button class="daybtn" onclick="jumpDay(1)" id="db1">Day 2</button>
+  <button class="daybtn" onclick="jumpDay(2)" id="db2">Day 3</button>
+  <button class="daybtn" onclick="jumpDay(3)" id="db3">Day 5</button>
+  <button class="daybtn" onclick="jumpDay(4)" id="db4">Day 7</button>
+  <button class="daybtn" onclick="jumpDay(5)" id="db5">Day 10</button>
+  <button class="daybtn" onclick="jumpDay(6)" id="db6">Day 14</button>
+</div>
+
+<div id="statsrow">
+  <div class="stcard green">Healthy: <span id="sH">-</span></div>
+  <div class="stcard yellow">Exposed: <span id="sE">-</span></div>
+  <div class="stcard orange">Symptomatic: <span id="sSy">-</span></div>
+  <div class="stcard red">Critical: <span id="sCr">-</span></div>
+  <div class="stcard red">Dead: <span id="sDd">-</span></div>
+  <div class="stcard blue">Recovered: <span id="sRec">-</span></div>
+  <div class="stcard cyan">Fleeing: <span id="sFl">-</span></div>
+  <div class="stcard orange">Food scarce: <span id="sFd">-</span></div>
+</div>
+<div id="statsrow2">
+  <div class="stcard red">Pvt hosp %: <span id="sPvt">-</span></div>
+  <div class="stcard red">Pub hosp %: <span id="sPub">-</span></div>
+  <div class="stcard yellow">Meds left: <span id="sMed">-</span>%</div>
+  <div class="stcard yellow">Food supply: <span id="sFdS">-</span>%</div>
+  <div class="stcard cyan">R-number: <span id="sR">-</span></div>
+  <div class="stcard red">Mortality: <span id="sMort">-</span>%</div>
+</div>
+
+<div id="hbar">
+  <span>Hospitals:</span>
+  <span id="h1" class="hpill">Aster CMI</span>
+  <span id="h2" class="hpill">Fortis BG</span>
+  <span id="h3" class="hpill">Manipal WF</span>
+  <span id="h4" class="hpill">Fortis NB</span>
+  <span id="h5" class="hpill">Victoria Govt</span>
+</div>
+
+<div id="eventlog"><b>LOG:</b> <span id="elogText">Initializing...</span></div>
+
+<div id="legend">
+  <div class="leg"><div class="dot" style="background:#4ade80"></div>Healthy</div>
+  <div class="leg"><div class="dot" style="background:#facc15"></div>Exposed</div>
+  <div class="leg"><div class="dot" style="background:#fb923c"></div>Symptomatic</div>
+  <div class="leg"><div class="dot" style="background:#f87171"></div>Critical</div>
+  <div class="leg"><div class="dot" style="background:#c084fc"></div>In hospital</div>
+  <div class="leg"><div class="dot" style="background:#6b7280"></div>Dead</div>
+  <div class="leg"><div class="dot" style="background:#60a5fa"></div>Recovered</div>
+  <div class="leg"><div class="dot" style="background:#38bdf8"></div>Fleeing (spreading)</div>
+</div>
+
+<canvas id="c"></canvas>
+
+<div id="notes">
+  <h3>Parameter Guide — edit the sliders above without touching the code</h3>
+  <p><code>Transmission Rate</code> — base probability per tick that an infectious agent spreads to a nearby healthy agent. Higher = faster spread.</p>
+  <p><code>Poor Zone Multiplier</code> — how much more likely poor-zone agents are to get infected (overcrowding, no clean water). Default 2.5×.</p>
+  <p><code>Hospital Debt Barrier</code> — % chance a poor uninsured patient gets turned away from private hospitals. 0 = open access, 100 = total exclusion.</p>
+  <p><code>Surge Cost</code> — multiplier on private hospital costs during crisis. Affects how many middle-class agents can afford care.</p>
+  <p><code>Vaccine Coverage</code> — % of rich/poor population that starts vaccinated (immune). Reflects pre-existing inequality in healthcare access.</p>
+  <p>To add new contamination zones or hospitals, edit the <code>WATER_SOURCES</code> and <code>HOSPITALS</code> arrays in the script below.</p>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// CORE CONFIGURATION — safe to edit these
+// ═══════════════════════════════════════════
+const MAP = { lat0: 12.84, lat1: 13.10, lon0: 77.48, lon1: 77.76 };
+
+const POOR_ZONES = [
+  [12.96,77.57,0.035],[12.94,77.60,0.03],[12.91,77.61,0.03],
+  [13.00,77.63,0.03],[12.88,77.60,0.03],[13.05,77.57,0.025],
+  [12.93,77.53,0.025],[12.97,77.64,0.02],[12.90,77.55,0.025],
+];
+const MIDDLE_ZONES = [
+  [12.97,77.59,0.04],[12.93,77.62,0.04],[12.99,77.63,0.035],
+  [12.96,77.55,0.035],[13.03,77.56,0.03],[12.95,77.69,0.03],
+];
+const RICH_ZONES = [
+  [12.97,77.66,0.025],[13.00,77.68,0.02],[12.96,77.70,0.02],
+  [12.91,77.59,0.02],[13.03,77.54,0.018],[12.98,77.57,0.015],
+];
+
+const WATER_SOURCES = [
+  {lat:12.935,lon:77.67,r:0.035,name:'Bellandur (contaminated)'},
+  {lat:12.905,lon:77.614,r:0.025,name:'Madiwala drain'},
+  {lat:12.96,lon:77.58,r:0.02,name:'Koramangala sewage'},
+  {lat:12.99,lon:77.60,r:0.022,name:'Central pipe breach'},
+];
+const AIR_CLUSTERS = [
+  {lat:12.975,lon:77.592,r:0.03,name:'Cubbon shelter'},
+  {lat:12.98,lon:77.563,r:0.025,name:'Rajajinagar market'},
+  {lat:12.94,lon:77.60,r:0.025,name:'Koramangala hub'},
+  {lat:13.054,lon:77.591,r:0.02,name:'Aster CMI queue'},
+];
+
+// Hospital definitions — edit cap/beds/cost to change capacity
+const HOSPITALS_DEF = [
+  {lat:13.054,lon:77.591,name:'Aster CMI',   type:'private',cap:200,beds:200,cost:5000},
+  {lat:12.895,lon:77.598,name:'Fortis BG',   type:'private',cap:150,beds:150,cost:4000},
+  {lat:12.988,lon:77.728,name:'Manipal WF',  type:'private',cap:120,beds:120,cost:4500},
+  {lat:12.96,lon:77.511, name:'Fortis NB',   type:'private',cap:100,beds:100,cost:3500},
+  {lat:12.97,lon:77.595, name:'Victoria Govt',type:'public', cap:250,beds:250,cost:0},
+];
+
+const FOOD_SOURCES_DEF = [
+  {lat:12.98,lon:77.56,stock:100,name:'Lulu'},
+  {lat:13.00,lon:77.62,stock:100,name:'Carry Fresh'},
+  {lat:12.92,lon:77.70,stock:100,name:'Mango Hyper'},
+  {lat:12.94,lon:77.58,stock:80,name:'Jayanagar Mkt'},
+  {lat:13.02,lon:77.58,stock:90,name:'Yeshwantpur'},
+  {lat:12.96,lon:77.61,stock:70,name:'Koramangala'},
+  {lat:12.91,lon:77.62,stock:65,name:'BTM Mkt'},
+  {lat:12.99,lon:77.66,stock:50,name:'Domlur'},
+];
+const EXIT_POINTS=[{lat:13.10,lon:77.60},{lat:12.84,lon:77.50},{lat:13.10,lon:77.52},{lat:12.84,lon:77.70}];
+const DAY_JUMPS=[0,1,2,4,6,9,13];
+
+// ═══════════════════════════════════════════
+// RUNTIME — do not edit below unless advanced
+// ═══════════════════════════════════════════
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=800,H=500;
+canvas.width=W; canvas.height=H;
+
+function toXY(lat,lon){return[(lon-MAP.lon0)/(MAP.lon1-MAP.lon0)*W,(1-(lat-MAP.lat0)/(MAP.lat1-MAP.lat0))*H];}
+function nearest(arr,lat,lon,f){const a=f?arr.filter(f):arr;if(!a.length)return null;return a.reduce((b,s)=>Math.hypot(lat-s.lat,lon-s.lon)<Math.hypot(lat-b.lat,lon-b.lon)?s:b);}
+
+let agents=[],hospitals=[],foodSources=[],tick=0,day=0,hour=0,paused=false,animId;
+let medSupply=100,foodSupply=100,events=[];
+const TICKS_PER_HOUR=15,HOURS_PER_DAY=24;
+
+function P(id){return parseFloat(document.getElementById(id).value);}
+
+function getPType(){return document.getElementById('pType').value;}
+function getGovt(){return document.getElementById('govtLevel').value;}
+function isNearSource(lat,lon){
+  const pt=getPType();
+  if(pt==='water'||pt==='both') if(WATER_SOURCES.some(s=>Math.hypot(lat-s.lat,lon-s.lon)<s.r)) return true;
+  if(pt==='air'||pt==='both') if(AIR_CLUSTERS.some(s=>Math.hypot(lat-s.lat,lon-s.lon)<s.r)) return true;
+  return false;
+}
+
+function addEvent(msg){events.unshift(msg);if(events.length>8)events.pop();document.getElementById('elogText').textContent=events.slice(0,2).join(' || ');}
+
+function spawnAgents(){
+  const popScale=P('popSize')/100;
+  const vaxR=P('vaxRich')/100, vaxP=P('vaxPoor')/100;
+  agents=[];
+  hospitals=HOSPITALS_DEF.map(h=>({...h,occupied:0,debt_barrier:h.type==='private'}));
+  foodSources=FOOD_SOURCES_DEF.map(f=>({...f,stock:f.stock*(P('initFood')/100)}));
+  medSupply=P('initMed'); foodSupply=P('initFood');
+  tick=0;day=0;hour=0;events=[];
+  let id=0;
+  function spawn(zones,cls,count){
+    zones.forEach(z=>{
+      const n=Math.floor(count*popScale/zones.length);
+      for(let i=0;i<n;i++){
+        const ang=Math.random()*Math.PI*2,r=Math.random()*z[2];
+        const lat=z[0]+Math.cos(ang)*r, lon=z[1]+Math.sin(ang)*r*1.5;
+        const initialExposed=isNearSource(lat,lon)&&Math.random()<0.12;
+        agents.push({
+          id:id++,lat,lon,cls,
+          state:initialExposed?'exposed':'healthy',
+          vLat:0,vLon:0,
+          infected:initialExposed,exposureTimer:initialExposed?Math.floor(Math.random()*30+10):0,
+          symptomTimer:0,critTimer:0,
+          immune:Math.random()<(cls==='rich'?0.25:cls==='middle'?0.15:0.08),
+          vaccinated:Math.random()<(cls==='rich'?vaxR:cls==='middle'?0.20:vaxP),
+          hasInsurance:cls==='rich'?true:cls==='middle'?Math.random()<0.35:Math.random()<0.08,
+          hasMoney:cls==='rich'?true:cls==='middle'?Math.random()<0.6:Math.random()<0.2,
+          hospitalDebt:cls==='poor'?Math.random()<0.3:false,
+          hp:100-(cls==='poor'?Math.random()*25:cls==='middle'?Math.random()*10:Math.random()*5),
+          hunger:cls==='poor'?50+Math.random()*30:Math.random()*25,
+          hasFood:cls!=='poor'?Math.random()<0.65:Math.random()<0.2,
+          hasWater:cls!=='poor'?Math.random()<0.55:Math.random()<0.15,
+          hasVehicle:cls==='rich'?Math.random()<0.9:cls==='middle'?Math.random()<0.4:Math.random()<0.07,
+          target:null,targetType:null,inHospital:false,hospitalRef:null,
+          fleeing:false,dead:false,
+          panicLevel:cls==='poor'?0.5+Math.random()*0.4:Math.random()*0.4,
+        });
+      }
+    });
+  }
+  spawn(POOR_ZONES,'poor',4500);
+  spawn(MIDDLE_ZONES,'middle',4000);
+  spawn(RICH_ZONES,'rich',1500);
+  addEvent('⚠️ Day 1: Outbreak detected. Contamination spreading silently.');
+}
+
+function resetSim(){
+  cancelAnimationFrame(animId);paused=false;
+  document.getElementById('pauseBtn').textContent='⏸ Pause';
+  spawnAgents();updateDayBtns(0);loop();
+}
+function togglePause(){
+  paused=!paused;
+  document.getElementById('pauseBtn').textContent=paused?'▶ Resume':'⏸ Pause';
+  if(!paused)loop();
+}
+function jumpDay(idx){
+  const tgt=DAY_JUMPS[idx]*HOURS_PER_DAY*TICKS_PER_HOUR;
+  while(tick<tgt)stepLogic();
+  updateDayBtns(idx);draw();
+}
+function stepDay(n){const tgt=tick+n*HOURS_PER_DAY*TICKS_PER_HOUR;while(tick<tgt)stepLogic();draw();}
+function updateDayBtns(idx){for(let i=0;i<7;i++)document.getElementById('db'+i).classList.toggle('active',i===idx);}
+
+function stepLogic(){
+  tick++;
+  const totalHour=Math.floor(tick/TICKS_PER_HOUR);
+  day=Math.floor(totalHour/HOURS_PER_DAY);
+  hour=totalHour%HOURS_PER_DAY;
+  const govt=getGovt(),pt=getPType();
+  const govtMult=govt==='strong'?0.4:govt==='partial'?0.7:1.0;
+  const transmit=P('transmitRate')/10000;
+  const poorMult=P('poorMult')/10;
+  const debtChance=P('debtBarrier')/100;
+
+  if(tick%(TICKS_PER_HOUR*8)===0){
+    const gFood=govt==='strong'?3:govt==='partial'?1:0;
+    const gMed=govt==='strong'?2:govt==='partial'?0.5:0;
+    foodSupply=Math.max(0,foodSupply-2.5*govtMult+gFood);
+    medSupply=Math.max(0,medSupply-1.8*govtMult+gMed);
+    foodSources.forEach(f=>{f.stock=Math.max(0,f.stock-Math.random()*1.5*govtMult);});
+  }
+
+  const prevDay=Math.floor((tick-1)/(TICKS_PER_HOUR*HOURS_PER_DAY));
+  if(day>prevDay){
+    const msgs={
+      1:'Day 2: Hospitals refusing uninsured. Poor patients turned away.',
+      2:'Day 3: Victoria Hospital overwhelmed — 400% capacity. Medicines rationed.',
+      3:'Day 4: Rich families chartering evacuation flights. Food black market 5×.',
+      4:'Day 5: Water tankers hijacked. Private hospitals billing ₹80K/day ICU.',
+      5:'Day 7: Mass graves reported. Rich suburbs still relatively safe.',
+      6:'Day 9: Partial WHO aid. Vaccination priority: paying patients first.',
+      7:'Day 12: Second wave from fleeing carriers. Rural Karnataka affected.',
+    };
+    if(msgs[day])addEvent(msgs[day]);
+    if(Math.random()<0.5){
+      const evts=[
+        '🏥 Private hospital increases ICU price 60%',
+        '💊 ORS/antibiotics depleted at Govt pharmacy',
+        '🚚 NGO truck distributing ORS near Cubbon Park',
+        '⚰️ Crematorium overwhelmed — 3 day wait',
+        '🩺 Doctors striking at Fortis over unpaid wages',
+        '📦 Black market: water ₹500/bottle, rice ₹800/kg',
+        '🔒 Rich gated communities blocking outsiders',
+        '💉 80% vaccine allocation to paying patients first',
+      ];
+      addEvent(evts[Math.floor(Math.random()*evts.length)]);
+    }
+  }
+
+  if(tick%3===0){
+    const infectious=agents.filter(a=>!a.dead&&!a.inHospital&&(a.state==='symptomatic'||a.state==='exposed'));
+    const spreadR=pt==='water'?0.012:pt==='air'?0.018:0.022;
+    infectious.forEach(src=>{
+      if(Math.random()>0.08)return;
+      agents.forEach(tgt=>{
+        if(tgt.dead||tgt.immune||tgt.vaccinated||tgt.state!=='healthy'||tgt.inHospital)return;
+        const dist=Math.hypot(src.lat-tgt.lat,src.lon-tgt.lon);
+        if(dist<spreadR){
+          let prob=transmit*(pt==='air'?1.5:1.0);
+          if(tgt.cls==='poor')prob*=poorMult;
+          if(!tgt.hasWater)prob*=1.8;
+          if(tgt.hasFood)prob*=0.7;
+          prob*=(govt==='strong'?0.5:govt==='partial'?0.75:1.0);
+          if(Math.random()<prob){tgt.state='exposed';tgt.infected=true;tgt.exposureTimer=Math.floor(20+Math.random()*40);}
+        }
+      });
+    });
+    if(pt==='water'||pt==='both'){
+      agents.forEach(a=>{
+        if(a.dead||a.immune||a.vaccinated||a.state!=='healthy')return;
+        if(!a.hasWater&&WATER_SOURCES.some(w=>Math.hypot(a.lat-w.lat,a.lon-w.lon)<w.r)){
+          if(Math.random()<0.005*(a.cls==='poor'?poorMult/2:1)){a.state='exposed';a.infected=true;a.exposureTimer=Math.floor(15+Math.random()*25);}
+        }
+      });
+    }
+  }
+
+  agents.forEach(a=>{
+    if(a.dead)return;
+    if(a.state==='exposed'){a.exposureTimer--;if(a.exposureTimer<=0)a.state='symptomatic';}
+    if(a.state==='symptomatic'){
+      a.symptomTimer++;
+      const critC=a.cls==='poor'?0.0018:a.cls==='middle'?0.0009:0.0004;
+      if(Math.random()<critC)a.state='critical';
+      if(a.symptomTimer>TICKS_PER_HOUR*72&&Math.random()<0.003)a.state='recovered';
+    }
+    if(a.state==='critical'){
+      a.critTimer++;
+      if(!a.inHospital){
+        const dC=medSupply>50?0.002:medSupply>20?0.005:0.012;
+        const cM=a.cls==='poor'?2.5:a.cls==='middle'?1.2:0.4;
+        if(Math.random()<dC*cM){a.dead=true;return;}
+      } else {
+        if(a.critTimer>TICKS_PER_HOUR*48&&Math.random()<0.006){a.state='recovered';a.inHospital=false;if(a.hospitalRef){a.hospitalRef.occupied--;a.hospitalRef=null;}}
+      }
+    }
+    if(tick%(TICKS_PER_HOUR*6)===0){
+      if(!a.hasFood)a.hunger=Math.min(100,a.hunger+(a.cls==='poor'?10:5));
+      else{a.hunger=Math.max(0,a.hunger-8);if(Math.random()<0.2)a.hasFood=false;}
+      if(a.hunger>85&&!a.inHospital){a.hp-=5;if(a.hp<=0){a.dead=true;return;}}
+      if(!a.hasWater&&(a.state==='symptomatic'||a.state==='critical'))a.hp-=3;
+    }
+    if(a.inHospital)return;
+    const spd=a.hasVehicle?(a.cls==='rich'?0.0020:0.0010):0.0004;
+    if(a.state==='critical'){
+      const avH=hospitals.filter(h=>{
+        if(h.occupied>=h.beds)return false;
+        if(h.debt_barrier&&!a.hasInsurance&&!a.hasMoney&&Math.random()<debtChance)return false;
+        return true;
+      });
+      const pH=hospitals.filter(h=>h.type==='public'&&h.occupied<h.beds*2.5);
+      const tH=a.cls==='poor'?(pH[0]||avH[0]):nearest(avH,a.lat,a.lon);
+      if(tH){
+        if(Math.hypot(a.lat-tH.lat,a.lon-tH.lon)<0.010){a.inHospital=true;a.hospitalRef=tH;tH.occupied++;}
+        else{const dl=tH.lat-a.lat,dn=tH.lon-a.lon,d=Math.sqrt(dl*dl+dn*dn);a.lat+=dl/d*spd;a.lon+=dn/d*spd*1.1;}
+      } else {if(Math.random()<0.008*(a.cls==='poor'?2:1))a.dead=true;}
+    } else if(a.hunger>60&&!a.hasFood){
+      const fs=foodSources.filter(f=>f.stock>0);
+      if(fs.length){const f=nearest(fs,a.lat,a.lon);if(Math.hypot(a.lat-f.lat,a.lon-f.lon)<0.009){a.hasFood=true;f.stock=Math.max(0,f.stock-2);a.hunger=Math.max(0,a.hunger-40);}else{const dl=f.lat-a.lat,dn=f.lon-a.lon,d=Math.sqrt(dl*dl+dn*dn);a.lat+=dl/d*spd*0.8;a.lon+=dn/d*spd*0.8;}}
+    } else if((a.state==='symptomatic'||a.state==='exposed')&&a.panicLevel>0.6&&a.hasVehicle){
+      a.fleeing=true;
+      const ep=EXIT_POINTS[Math.floor(Math.random()*EXIT_POINTS.length)];
+      const dl=ep.lat-a.lat,dn=ep.lon-a.lon,d=Math.sqrt(dl*dl+dn*dn);
+      if(d<0.02)a.fleeing=false;else{a.lat+=dl/d*spd*1.2;a.lon+=dn/d*spd*1.2;}
+    } else if(a.state==='healthy'&&Math.random()<0.001){a.lat+=(Math.random()-0.5)*0.0006;a.lon+=(Math.random()-0.5)*0.0008;}
+    a.lat=Math.max(MAP.lat0,Math.min(MAP.lat1,a.lat));
+    a.lon=Math.max(MAP.lon0,Math.min(MAP.lon1,a.lon));
+  });
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#0f172a';ctx.fillRect(0,0,W,H);
+  POOR_ZONES.forEach(z=>{const[cx,cy]=toXY(z[0],z[1]);const rx=z[2]/(MAP.lon1-MAP.lon0)*W,ry=z[2]/(MAP.lat1-MAP.lat0)*H;ctx.fillStyle='rgba(245,158,11,0.07)';ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);ctx.fill();});
+  const pt=getPType();
+  if(pt==='water'||pt==='both'){WATER_SOURCES.forEach(z=>{const[cx,cy]=toXY(z.lat,z.lon);const rx=z.r/(MAP.lon1-MAP.lon0)*W,ry=z.r/(MAP.lat1-MAP.lat0)*H;ctx.save();ctx.setLineDash([3,3]);ctx.strokeStyle='#06b6d4';ctx.lineWidth=1;ctx.fillStyle='rgba(6,182,212,0.10)';ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.setLineDash([]);ctx.restore();ctx.fillStyle='#0891b2';ctx.font='9px sans-serif';ctx.textAlign='center';ctx.fillText(z.name,cx,cy-ry-3);});}
+  if(pt==='air'||pt==='both'){AIR_CLUSTERS.forEach(z=>{const[cx,cy]=toXY(z.lat,z.lon);const rx=z.r/(MAP.lon1-MAP.lon0)*W,ry=z.r/(MAP.lat1-MAP.lat0)*H;ctx.save();ctx.setLineDash([2,4]);ctx.strokeStyle='#a78bfa';ctx.lineWidth=1;ctx.fillStyle='rgba(167,139,250,0.08)';ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.setLineDash([]);ctx.restore();});}
+  foodSources.forEach(f=>{const[x,y]=toXY(f.lat,f.lon);const pct=f.stock/100;ctx.fillStyle=pct>0.5?'#16a34a':pct>0.2?'#d97706':'#dc2626';ctx.fillRect(x-4,y-4,8,8);ctx.fillStyle='#e5e7eb';ctx.font='8px sans-serif';ctx.textAlign='center';ctx.fillText(Math.round(f.stock)+'%',x,y+13);});
+  const hLabels=['h1','h2','h3','h4','h5'];
+  hospitals.forEach((h,i)=>{
+    const[x,y]=toXY(h.lat,h.lon);const pct=Math.min(1,h.occupied/h.beds);
+    const col=pct>0.9?'#dc2626':pct>0.6?'#d97706':'#16a34a';
+    ctx.fillStyle='#7c3aed';ctx.fillRect(x-7,y-7,14,14);
+    ctx.fillStyle=col;ctx.fillRect(x-6,y-6,12,12);
+    ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText(h.type==='public'?'G':'H',x,y+3);
+    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(x-7,y+8,14,3);
+    ctx.fillStyle=col;ctx.fillRect(x-7,y+8,Math.round(pct*14),3);
+    const pill=document.getElementById(hLabels[i]);
+    if(pill){const p=Math.min(999,Math.round(h.occupied/h.beds*100));pill.textContent=`${h.name} ${p}%`;pill.style.background=pct>0.9?'#7f1d1d':pct>0.6?'#78350f':'#14532d';pill.style.color=pct>0.9?'#fca5a5':pct>0.6?'#fcd34d':'#86efac';}
+  });
+  let cH=0,cE=0,cSy=0,cCr=0,cDd=0,cRec=0,cFl=0,cFd=0;
+  agents.forEach(a=>{
+    if(a.dead)cDd++;else if(a.state==='recovered')cRec++;else if(a.state==='critical')cCr++;else if(a.state==='symptomatic')cSy++;else if(a.state==='exposed')cE++;else cH++;
+    if(a.fleeing)cFl++;if(a.hunger>60)cFd++;
+    if(a.inHospital)return;
+    const[x,y]=toXY(a.lat,a.lon);if(x<0||x>W||y<0||y>H)return;
+    let col;
+    if(a.dead)col='rgba(107,114,128,0.4)';
+    else if(a.state==='recovered')col='#60a5fa';
+    else if(a.state==='critical')col='#f87171';
+    else if(a.state==='symptomatic')col=a.fleeing?'#38bdf8':'#fb923c';
+    else if(a.state==='exposed')col='#facc15';
+    else col=a.cls==='rich'?'rgba(96,165,250,0.5)':a.cls==='middle'?'rgba(74,222,128,0.5)':'rgba(245,158,11,0.4)';
+    ctx.fillStyle=col;ctx.beginPath();ctx.arc(x,y,a.dead?1.5:2,0,Math.PI*2);ctx.fill();
+  });
+  document.getElementById('sH').textContent=cH;document.getElementById('sE').textContent=cE;document.getElementById('sSy').textContent=cSy;document.getElementById('sCr').textContent=cCr;document.getElementById('sDd').textContent=cDd;document.getElementById('sRec').textContent=cRec;document.getElementById('sFl').textContent=cFl;document.getElementById('sFd').textContent=cFd;
+  const ti=cE+cSy+cCr+cDd+cRec;
+  const rBase=pt==='water'?2.1:pt==='air'?3.4:4.2;
+  const gAdj=getGovt()==='strong'?0.6:getGovt()==='partial'?0.8:1.0;
+  document.getElementById('sR').textContent=(rBase*gAdj*(medSupply/100+0.1)).toFixed(1);
+  document.getElementById('sMort').textContent=ti>0?Math.round(cDd/ti*100):'0';
+  document.getElementById('sMed').textContent=Math.round(medSupply);
+  document.getElementById('sFdS').textContent=Math.round(foodSupply);
+  const pvt=hospitals.filter(h=>h.type==='private');
+  document.getElementById('sPvt').textContent=Math.min(999,Math.round(pvt.reduce((s,h)=>s+h.occupied/h.beds,0)/pvt.length*100));
+  document.getElementById('sPub').textContent=Math.min(999,Math.round(hospitals.filter(h=>h.type==='public').reduce((s,h)=>s+h.occupied/h.beds,0)*100));
+  document.getElementById('dayLabel').textContent=`Day ${day+1} — ${String(hour).padStart(2,'0')}:00`;
+  ctx.fillStyle='rgba(0,0,0,0.55)';ctx.beginPath();ctx.roundRect(W-150,6,144,44,5);ctx.fill();
+  ctx.fillStyle='#94a3b8';ctx.font='10px sans-serif';ctx.textAlign='left';
+  ctx.fillText(`Infected: ${cE+cSy+cCr} (${Math.round((cE+cSy+cCr)/agents.length*100)}%)`,W-144,20);
+  ctx.fillText(`Meds: ${Math.round(medSupply)}%  Food: ${Math.round(foodSupply)}%`,W-144,33);
+  ctx.fillText(`Dead: ${cDd}  Fled: ${cFl}`,W-144,46);
+}
+
+function loop(){
+  if(paused)return;
+  const spd=parseInt(document.getElementById('simSpeed').value)||6;
+  for(let i=0;i<spd;i++)stepLogic();
+  draw();
+  animId=requestAnimationFrame(loop);
+}
+
+resetSim();
+</script>
+</body>
+</html>
