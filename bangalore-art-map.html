@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bengaluru Art Origins — Cultural Atlas</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #1a1207;
+  --paper: #f5efe3;
+  --paper-dark: #ede4d0;
+  --saffron: #c9631e;
+  --jade: #1a6644;
+  --jade-light: #d4ede2;
+  --muted: #7a6a52;
+  --border: rgba(26,18,7,0.13);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; font-family:'DM Sans',sans-serif; background:var(--paper); color:var(--ink); overflow:hidden; display:flex; flex-direction:column; }
+
+header { background:var(--ink); color:var(--paper); padding:10px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid var(--saffron); flex-shrink:0; gap:12px; }
+header h1 { font-family:'Playfair Display',serif; font-size:1.15rem; font-weight:700; line-height:1; white-space:nowrap; }
+header p  { font-size:0.6rem; color:rgba(245,239,227,0.44); letter-spacing:0.11em; text-transform:uppercase; margin-top:3px; }
+.header-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.city-badge { background:var(--saffron); color:#fff; font-size:0.6rem; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; padding:3px 10px; border-radius:20px; white-space:nowrap; }
+.layer-toggle { display:flex; background:rgba(255,255,255,0.1); border-radius:20px; padding:3px; gap:2px; }
+.ltog { padding:3px 11px; border-radius:16px; font-size:0.66rem; font-weight:500; cursor:pointer; color:rgba(245,239,227,0.6); transition:all 0.15s; white-space:nowrap; }
+.ltog.active { background:white; color:var(--ink); }
+
+.filter-bar { background:var(--paper-dark); border-bottom:1px solid var(--border); padding:6px 16px; display:flex; gap:5px; align-items:center; overflow-x:auto; flex-shrink:0; scrollbar-width:none; }
+.filter-bar::-webkit-scrollbar { display:none; }
+.filter-label { font-size:0.61rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); font-weight:500; white-space:nowrap; margin-right:3px; }
+.pill { display:flex; align-items:center; gap:4px; padding:3px 10px; border-radius:20px; border:1.5px solid var(--border); background:white; font-size:0.7rem; font-weight:500; cursor:pointer; white-space:nowrap; transition:all 0.15s; color:var(--ink); user-select:none; }
+.pill:hover { border-color:var(--saffron); color:var(--saffron); }
+.pill.active { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.pill .dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+
+.main { display:flex; flex:1; overflow:hidden; min-height:0; }
+
+.sidebar { width:290px; background:white; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; }
+.sidebar-hd { padding:11px 14px 8px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.sidebar-hd h2 { font-family:'Playfair Display',serif; font-size:0.88rem; font-weight:600; }
+.sidebar-hd p  { font-size:0.64rem; color:var(--muted); margin-top:1px; }
+.entries-list { overflow-y:auto; flex:1; padding:3px 0; }
+.entries-list::-webkit-scrollbar { width:3px; }
+.entries-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+.list-section-hd { padding:6px 14px 3px; font-size:0.58rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:5px; position:sticky; top:0; background:white; z-index:2; }
+.list-section-hd .sdot { width:7px; height:7px; border-radius:2px; flex-shrink:0; }
+
+.entry-card { padding:7px 14px; border-bottom:1px solid rgba(26,18,7,0.05); cursor:pointer; transition:background 0.11s; display:flex; gap:8px; align-items:flex-start; }
+.entry-card:hover { background:var(--paper); }
+.entry-card.selected { background:var(--paper-dark); border-left:3px solid var(--saffron); padding-left:11px; }
+.entry-card.selected.av { border-left-color:var(--jade); }
+.entry-icon { width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:0.85rem; flex-shrink:0; }
+.entry-meta { flex:1; min-width:0; }
+.entry-name { font-weight:500; font-size:0.79rem; line-height:1.3; }
+.entry-type { font-size:0.59rem; color:var(--muted); margin-top:1px; text-transform:uppercase; letter-spacing:0.06em; }
+.entry-era  { font-size:0.61rem; font-weight:500; margin-top:2px; }
+
+.detail-panel { display:none; flex-direction:column; background:#fffdf9; border-top:2px solid var(--border); flex-shrink:0; overflow-y:auto; max-height:255px; }
+.detail-panel.open { display:flex; }
+.detail-inner { padding:12px 14px 10px; position:relative; }
+.close-btn { position:absolute; top:8px; right:10px; background:none; border:none; cursor:pointer; font-size:0.88rem; color:var(--muted); }
+.d-cat   { display:inline-flex; align-items:center; gap:4px; padding:2px 7px; border-radius:8px; font-size:0.6rem; font-weight:500; letter-spacing:0.07em; text-transform:uppercase; margin-bottom:6px; }
+.d-title { font-family:'Playfair Display',serif; font-size:1rem; font-weight:700; line-height:1.2; }
+.d-meta  { display:flex; gap:10px; margin:5px 0 8px; flex-wrap:wrap; }
+.d-meta span { font-size:0.65rem; color:var(--muted); }
+.d-meta b    { color:var(--ink); font-weight:500; }
+.d-desc  { font-size:0.76rem; line-height:1.65; color:#3a2f20; }
+.d-tags  { display:flex; flex-wrap:wrap; gap:3px; margin-top:8px; }
+.d-tag   { padding:2px 6px; background:var(--paper-dark); border-radius:6px; font-size:0.59rem; color:var(--muted); }
+.d-link  { display:inline-block; margin-top:7px; font-size:0.69rem; color:var(--jade); font-weight:500; text-decoration:none; border-bottom:1px solid rgba(26,102,68,0.3); }
+
+.map-wrap { flex:1; position:relative; min-height:0; }
+#map { width:100%; height:100%; }
+
+.map-legend { position:absolute; bottom:28px; right:10px; z-index:1000; background:white; border:1px solid var(--border); border-radius:9px; padding:9px 13px; box-shadow:0 4px 14px rgba(0,0,0,0.09); }
+.legend-row { display:flex; align-items:center; gap:7px; font-size:0.66rem; color:var(--ink); margin-bottom:5px; }
+.legend-row:last-child { margin-bottom:0; }
+.leg-circle { width:16px; height:16px; border-radius:50%; border:2px solid white; box-shadow:0 1px 4px rgba(0,0,0,0.2); flex-shrink:0; }
+.leg-diamond { width:13px; height:13px; border-radius:2px; transform:rotate(45deg); flex-shrink:0; border:2px solid white; box-shadow:0 1px 4px rgba(0,0,0,0.2); }
+.leg-count { font-size:0.58rem; color:var(--muted); margin-left:2px; }
+
+/* Leaflet popup */
+.leaflet-popup-content-wrapper { background:#1a1207; color:#f5efe3; border-radius:10px; padding:0; border:none; box-shadow:0 6px 24px rgba(0,0,0,0.3); }
+.leaflet-popup-tip { background:#1a1207; }
+.leaflet-popup-content { margin:0 !important; }
+.leaflet-popup-close-button { color:rgba(245,239,227,0.55) !important; top:6px !important; right:8px !important; }
+.pop-inner { padding:10px 13px 12px; min-width:160px; max-width:230px; }
+.pop-layer { font-size:0.57rem; letter-spacing:0.09em; text-transform:uppercase; margin-bottom:2px; }
+.pop-cat  { font-size:0.58rem; letter-spacing:0.08em; text-transform:uppercase; color:rgba(245,239,227,0.4); margin-bottom:1px; }
+.pop-name { font-family:'Playfair Display',serif; font-size:0.9rem; font-weight:600; line-height:1.2; }
+.pop-era  { font-size:0.62rem; color:#e08030; margin-top:3px; font-weight:500; }
+.pop-desc { font-size:0.67rem; color:rgba(245,239,227,0.68); margin-top:4px; line-height:1.45; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Bengaluru Art Origins</h1>
+    <p>Cultural Atlas · Geotagged Heritage</p>
+  </div>
+  <div class="header-right">
+    <div class="layer-toggle">
+      <div class="ltog active" id="ltog-origins" onclick="setLayer('origins')">Origins</div>
+      <div class="ltog" id="ltog-active"  onclick="setLayer('active')">Active Today</div>
+      <div class="ltog" id="ltog-both"    onclick="setLayer('both')">Both</div>
+    </div>
+    <div class="city-badge">Bengaluru · Phase I</div>
+  </div>
+</header>
+
+<div class="filter-bar">
+  <span class="filter-label">Category:</span>
+  <div class="pill active"              onclick="filterBy('all',this)">All</div>
+  <div class="pill" onclick="filterBy('performance',this)"><span class="dot" style="background:#c9631e"></span>Performing Arts</div>
+  <div class="pill" onclick="filterBy('visual',this)"><span class="dot" style="background:#2c3e7a"></span>Visual Art</div>
+  <div class="pill" onclick="filterBy('craft',this)"><span class="dot" style="background:#2d6a4f"></span>Craft</div>
+  <div class="pill" onclick="filterBy('music',this)"><span class="dot" style="background:#d4a017"></span>Music &amp; Poetry</div>
+  <div class="pill" onclick="filterBy('venue',this)"><span class="dot" style="background:#7a4f7a"></span>Heritage Venues</div>
+  <div class="pill" onclick="filterBy('festival',this)"><span class="dot" style="background:#b5341d"></span>Festivals</div>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="sidebar-hd">
+      <h2>Art Origins &amp; Active Venues</h2>
+      <p id="count-lbl">Loading…</p>
+    </div>
+    <div class="entries-list" id="entries-list"></div>
+    <div class="detail-panel" id="detail-panel">
+      <div class="detail-inner" id="detail-inner"></div>
+    </div>
+  </div>
+
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="map-legend">
+      <div class="legend-row">
+        <div class="leg-circle" style="background:#c9631e"></div>
+        <span>Art origin / heritage site</span>
+        <span class="leg-count" id="leg-o-count">(18)</span>
+      </div>
+      <div class="legend-row">
+        <div class="leg-diamond" style="background:#1a6644"></div>
+        <span style="color:var(--jade);font-weight:500">Active training / performance</span>
+        <span class="leg-count" id="leg-a-count">(28)</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CAT = {
+  performance:{ color:'#c9631e', bg:'#fde8d8', emoji:'🎭' },
+  visual:     { color:'#2c3e7a', bg:'#d8e0f5', emoji:'🎨' },
+  craft:      { color:'#2d6a4f', bg:'#d4ede2', emoji:'🧵' },
+  music:      { color:'#d4a017', bg:'#fcefc8', emoji:'🎵' },
+  venue:      { color:'#7a4f7a', bg:'#ead8ea', emoji:'🏛️' },
+  festival:   { color:'#b5341d', bg:'#f5d5d0', emoji:'🪔' },
+};
+
+// ── LAYER 1: Origins (18 entries) ─────────────────────
+const ORIGINS = [
+  {id:'o1',  layer:'origin', name:"Yakshagana",           category:"performance", era:"Pre-16th c.",          location:"Bengaluru & Coastal Karnataka",            lat:12.9716, lng:77.5946, short:"Ancient dance-drama merging myth, music and elaborate costume",              desc:"Yakshagana is a traditional theatre form fusing dance, costumes, music, and narrative from epics like the Ramayana and Mahabharata. Though rooted in coastal Karnataka, it has been performed and patronised in Bengaluru for centuries.", tags:["Dance Drama","Folk Theatre","Mythological"]},
+  {id:'o2',  layer:'origin', name:"Dollu Kunitha",         category:"performance", era:"Medieval",             location:"Bengaluru region (Kuruba community)",      lat:12.9500, lng:77.5720, short:"Drum-based ritual dance of the Kuruba shepherd community",                  desc:"A vigorous drum dance performed by the Kuruba community. Performers play large hanging drums in synchronized high-energy formations, inseparable from Basavanna worship.", tags:["Drum Dance","Kuruba Community","Folk Ritual"]},
+  {id:'o3',  layer:'origin', name:"Karaga Ritual",         category:"festival",   era:"400+ years",           location:"Dharmaraja Temple, Tigalarapete",          lat:12.9635, lng:77.5773, short:"Sacred night-long ritual of the Tigala community honoring Draupadi",        desc:"Male priests of the Tigala community carry a flower-decked pot through old Bengaluru at night as devotion to Draupadi. Performed continuously for over 400 years.", tags:["Tigala Community","Mahabharata","Procession"]},
+  {id:'o4',  layer:'origin', name:"Mysore Painting",       category:"visual",     era:"16th–19th c.",          location:"Karnataka Chitrakala Parishath",           lat:12.9891, lng:77.5813, short:"Classical South Indian painting with gold foil and natural pigments",        desc:"Emerged under the Mysore royal court — fine brushwork, muted palettes, gold leaf, and devotional themes. Chitrakala Parishath preserves a major collection.", tags:["Classical Painting","Gold Foil","Royal Patronage"]},
+  {id:'o5',  layer:'origin', name:"Tholu Bommalata",       category:"performance", era:"Medieval",             location:"Karnataka Chitrakala Parishath",           lat:12.9885, lng:77.5808, short:"Leather shadow puppet theatre narrating epic stories",                     desc:"Leather shadow puppets from tanned hide backlit against a cloth screen. Narratives from the Ramayana, Mahabharata, and Puranas. Chitrakala Parishath houses a major collection.", tags:["Shadow Theatre","Leather Craft","Endangered"]},
+  {id:'o6',  layer:'origin', name:"Chitrakala Parishath", category:"venue",       era:"Est. 1960",            location:"No.1 Kumara Krupa Rd, Seshadripuram",     lat:12.9891, lng:77.5813, short:"Premier visual arts complex — 18 galleries and fine arts college",           desc:"Founded in 1960, spanning 13 acres. Houses 18 galleries of Mysore paintings, leather puppets, an open-air theatre, a fine arts college, and hosts Chitra Santhe every January.", tags:["Visual Art Complex","18 Galleries","Art School"]},
+  {id:'o7',  layer:'origin', name:"Ranga Shankara",        category:"venue",      era:"Est. 2004",            location:"36/2 8th Cross, JP Nagar 2nd Phase",      lat:12.9116, lng:77.5863, short:"Bengaluru's foremost theatre, built in memory of Shankar Nag",             desc:"Named after Kannada actor Shankar Nag, Ranga Shankara stages at least one play every day across 23+ languages and runs the annual AHA! Festival.", tags:["Contemporary Theatre","Kannada Drama","AHA! Festival"]},
+  {id:'o8',  layer:'origin', name:"Carnatic Music",        category:"music",      era:"15th–16th c.",          location:"Bengaluru lineage (Rama Seva Mandali)",    lat:12.9769, lng:77.5713, short:"Classical South Indian music, fathered by Purandaradasa of Karnataka",       desc:"Purandaradasa (1484–1564) standardised the foundational graded lessons of Carnatic music. The Rama Seva Mandali in Malleshwaram has run continuous monthly concerts for over 65 years.", tags:["Carnatic","Purandaradasa","Classical Music"]},
+  {id:'o9',  layer:'origin', name:"Bharatanatyam",         category:"performance", era:"20th c. revival",      location:"Nrityagram, Hesaraghatta (30 km)",        lat:13.1386, lng:77.4779, short:"Classical Indian dance with a distinct Bengaluru revival lineage",          desc:"Nrityagram — founded by Protima Bedi near Hesaraghatta — is India's first modern gurukul for Indian classical dance, training students in Bharatanatyam, Odissi, Kathak and more.", tags:["Classical Dance","Nrityagram","20th Century Revival"]},
+  {id:'o10', layer:'origin', name:"Bhavageethe",           category:"music",      era:"20th c.",              location:"Bengaluru (multiple venues)",              lat:12.9750, lng:77.6070, short:"Kannada poetry set to folk-inflected melody — intimate and beloved",       desc:"Works of Kuvempu and D.R. Bendre set to evocative simple melodies. C. Ashwath brought Bhavageethe to concert halls, making it a defining cultural touchstone of Bengaluru.", tags:["Kannada Poetry","C. Ashwath","Kuvempu"]},
+  {id:'o11', layer:'origin', name:"Kasuti Embroidery",     category:"craft",      era:"Classical Karnataka",   location:"Bengaluru craft clusters",                lat:12.9540, lng:77.5640, short:"Intricate hand-embroidery — up to 5,000 stitches per garment",            desc:"Karnataka's exquisite needlework on Ilkal sarees — up to 5,000 hand stitches using four stitch types. GI tagged, being revived in Bengaluru craft circles.", tags:["Embroidery","GI Tag","Ilkal Saree"]},
+  {id:'o12', layer:'origin', name:"Ganjifa Card Art",      category:"visual",     era:"Mughal-era onward",    location:"Bengaluru collections",                   lat:12.9680, lng:77.5990, short:"Circular hand-painted cards — a near-extinct Karnataka art form",          desc:"In Karnataka, Ganjifa became elaborate circular paintings on lacquered cloth depicting the Dashavatara. Nearly extinct — only a handful of practitioners remain.", tags:["Endangered Art","Circular Painting","Dashavatara"]},
+  {id:'o13', layer:'origin', name:"Janapada Loka",         category:"venue",      era:"Est. 1994",            location:"Bangalore–Mysore Hwy, nr. Ramanagara",    lat:12.7200, lng:77.2760, short:"5,000-artifact museum of Karnataka folk culture, 53 km from Bengaluru",   desc:"Founded by folklorist H.L. Nage Gowda, this 15-acre campus houses over 5,000 objects — brass vessels, chariots, stone sculptures, and Yakshagana costumes.", tags:["Folk Museum","H.L. Nage Gowda","Rural Karnataka"]},
+  {id:'o14', layer:'origin', name:"Veeragase",             category:"performance", era:"Medieval Karnataka",   location:"Old Bengaluru (Pete area)",               lat:12.9635, lng:77.5700, short:"Fierce devotional warrior dance of Veerabhadra worship",                   desc:"A vigorous solo dance in warrior form, associated with Veerabhadra — a manifestation of Shiva. Performed at temple festivals and processions across old Bengaluru.", tags:["Warrior Dance","Veerabhadra","Temple Festival"]},
+  {id:'o15', layer:'origin', name:"Pata Kunitha",          category:"performance", era:"Traditional",          location:"Rural Bengaluru region",                  lat:12.9820, lng:77.6380, short:"Folk dance with vibrant ribbon-adorned poles",                            desc:"Performers balance and dance with long poles adorned with colourful ribbons, performed to traditional percussion at rural fairs and harvest festivals.", tags:["Pole Dance","Folk Performance","Rare Form"]},
+  {id:'o16', layer:'origin', name:"Kadalekai Parishe",     category:"festival",   era:"Centuries old",        location:"Bull Temple, Basavanagudi",                lat:12.9427, lng:77.5703, short:"Ancient annual groundnut harvest offering at the Bull Temple",            desc:"Farmers bring the first groundnut harvest as an offering to Nandi at the 16th-century Bull Temple in Basavanagudi. The fair features folk performances, street food, and craft stalls.", tags:["Harvest Festival","Basavanagudi","Nandi Worship"]},
+  {id:'o17', layer:'origin', name:"Bengaluru Karaga",      category:"festival",   era:"400+ years",           location:"Dharmaraja Temple to City Market",         lat:12.9635, lng:77.5773, short:"Bengaluru's oldest continuous festival — nocturnal procession through Pete", desc:"The nocturnal procession winds through Pete streets — Bengaluru's oldest festival, tied to pre-Kempe Gowda identity and Mahabharata devotion.", tags:["Oldest Festival","Procession","Tigala Heritage"]},
+  {id:'o18', layer:'origin', name:"Chitra Santhe",         category:"festival",   era:"Est. 1981",            location:"Kumara Krupa Rd, Seshadripuram",           lat:12.9891, lng:77.5813, short:"Bengaluru's landmark annual open-air art bazaar — Art for All",          desc:"A one-day annual fair every January at Chitrakala Parishath. Over 5,000 artists sell original works to the public. One of India's largest art markets.", tags:["Art Bazaar","Annual Fair","Art Democratisation"]},
+];
+
+// ── LAYER 2: Active Today (28 venues) ─────────────────
+const ACTIVE = [
+  // ── THEATRE VENUES ────────────────────────────────────
+  {id:'a1',  layer:'active', name:"Ranga Shankara",          category:"performance", era:"Active · daily theatre",   location:"JP Nagar 2nd Phase",               lat:12.9116, lng:77.5863, short:"A play every single day — 23+ languages, workshops in folk forms",          desc:"Stages at least one play every day (except Monday) in Kannada, Hindi, English and 20+ other languages. Regularly hosts Yakshagana and Dollu Kunitha workshops as part of its theatre education programme. Their AHA! Festival is a city-wide annual celebration.", tags:["Daily Theatre","Kannada Drama","Folk Workshops","AHA! Festival"], link:"https://rangashankara.org"},
+  {id:'a2',  layer:'active', name:"Jagriti Theatre",          category:"performance", era:"Active · performances",    location:"Varthur Rd, Whitefield",           lat:12.9571, lng:77.7310, short:"200-seat professional theatre — drama, dance, comedy and children's workshops", desc:"Founded in 2011 by Arundhati and Jagdish Raja. The 200-seat venue with 62 dedicated stage lights is one of Bengaluru's finest professional performance spaces. Hosts a Theatre Arts Programme for children aged 8–18, adult workshops, and international productions.", tags:["Professional Theatre","Children's Workshops","200 Seats","Whitefield"], link:"https://jagrititheatre.com"},
+  {id:'a3',  layer:'active', name:"Ravindra Kalakshetra",     category:"performance", era:"Active · year-round",      location:"Gandhi Nagar, Central Bengaluru",   lat:12.9592, lng:77.5927, short:"Main government cultural auditorium — Carnatic, drama, dance, Yakshagana",  desc:"Built to commemorate Rabindranath Tagore's birth centenary, this is Bengaluru's principal government cultural centre. Hosts Carnatic concerts, Yakshagana troupes, Bharatanatyam recitals, Kannada drama, and Bhavageethe evenings throughout the year.", tags:["Government Venue","Yakshagana","Carnatic","Drama","Bharatanatyam"]},
+  {id:'a4',  layer:'active', name:"Chowdaiah Memorial Hall",  category:"music",      era:"Active · concerts",        location:"Vyalikaval, Sadashivanagar",        lat:13.0055, lng:77.5691, short:"Violin-shaped concert hall — premier venue for Carnatic and Bhavageethe",   desc:"Built in the shape of a violin to honour violin maestro T. Chowdaiah, this is Bengaluru's most prestigious private concert hall. Hosts Carnatic recitals, Bhavageethe evenings, classical dance and major productions from across India.", tags:["Concert Hall","Carnatic","Bhavageethe","Cultural Venue"]},
+  {id:'a5',  layer:'active', name:"Rangamandira",              category:"performance", era:"Active · drama venue",    location:"JC Road, opposite Ravindra Kalakshetra", lat:12.9590, lng:77.5921, short:"Major Kannada drama venue — mythology, folk and contemporary Kannada plays",  desc:"A.D.A. Rangamandira (540 seats) is one of Bengaluru's busiest performing arts venues. Its calendar is packed with intense Kannada plays, family comedies, Shakespearean adaptations, mythology, and folk drama. It sits opposite Ravindra Kalakshetra.", tags:["Kannada Drama","540 Seats","Mythology","Folk Drama"]},
+  {id:'a6',  layer:'active', name:"Alliance Française",        category:"performance", era:"Active · world theatre",  location:"Thimmaiah Rd, Vasantnagar",         lat:12.9919, lng:77.5858, short:"French cultural centre — international theatre, film, dance and music",       desc:"Alliance Française de Bangalore hosts international theatre troupes, Francophone film festivals, contemporary dance performances and music concerts year-round. One of the few venues in Bengaluru programming world theatre regularly.", tags:["International Theatre","French Culture","Film Festival","Dance"], link:"https://bangalore.afindia.org"},
+  {id:'a7',  layer:'active', name:"KH Kala Soudha",            category:"performance", era:"Active · Kannada drama",  location:"Hanumantha Nagar, South Bengaluru", lat:12.9340, lng:77.5620, short:"Packed Kannada folk drama and cultural performance calendar",                  desc:"KH Kala Soudha in Hanumantha Nagar runs a packed calendar of Kannada folk drama, mythological plays and cultural performances supported by a legion of Karnataka theatre artists. Managed by Fourth Corner Consultants and built by BBMP.", tags:["Kannada Folk Drama","Mythology","Community Theatre","BBMP Venue"]},
+  {id:'a8',  layer:'active', name:"Atta Galatta",               category:"performance", era:"Active · literary theatre",location:"Koramangala 80 Feet Rd",            lat:12.9352, lng:77.6245, short:"Bookstore performance space — literary theatre, story-driven plays",          desc:"More than a bookstore, Atta Galatta's intimate performance space hosts theatrical interpretations of literature — plays infused with humour, tragedy, and drama. Popular for new writing and story-based experimental theatre.", tags:["Literary Theatre","Bookstore Venue","Experimental","Intimate Space"]},
+  {id:'a9',  layer:'active', name:"Good Shepherd Auditorium",  category:"performance", era:"Active · multi-art",      location:"St. Mark's Rd, Central Bengaluru",  lat:12.9741, lng:77.5952, short:"Large multi-use auditorium — theatre, concerts, exhibitions",               desc:"Good Shepherd Auditorium hosts a wide range of art events — theatre productions, concerts, dance performances, exhibitions and cultural festivals. One of the larger privately-run cultural spaces in central Bengaluru.", tags:["Multi-Use Auditorium","Theatre","Concerts","Exhibitions"]},
+  {id:'a10', layer:'active', name:"Rangoli Metro Art Center",  category:"visual",     era:"Active · daily exhibitions",location:"MG Road Metro Station",             lat:12.9749, lng:77.6094, short:"Free art gallery inside MG Road Metro — folk art, Mysore painting, Kasuti", desc:"A permanent gallery space inside the MG Road Metro station run by BMRCL. Hosts rotating exhibitions of Karnataka folk art, Mysore paintings, Kasuti embroidery and contemporary works — free entry, over 10,000 visitors a day pass through.", tags:["Folk Art","Exhibitions","Metro Gallery","Free Entry"]},
+  // ── CLASSICAL DANCE ──────────────────────────────────
+  {id:'a11', layer:'active', name:"Nrityagram",                category:"performance", era:"Active · residential gurukul", location:"Hesaraghatta, 30 km from city",   lat:13.1386, lng:77.4779, short:"India's premier classical dance gurukul — Bharatanatyam, Odissi, Kathak", desc:"Founded 1990 by Protima Bedi, Nrityagram is a residential gurukul training dancers full-time in Odissi, Bharatanatyam, Kathak, Kuchipudi and Mohiniyattam. Open to visitors Tue–Sun. Hosts Vasanthahabba — an annual all-night outdoor festival.", tags:["Gurukul","Odissi","Bharatanatyam","Residential Training"], link:"https://nrityagram.org"},
+  {id:'a12', layer:'active', name:"Abhinava Dance Company",    category:"performance", era:"Active · training",          location:"Basavanagudi, South Bengaluru",     lat:12.9437, lng:77.5740, short:"Professional Bharatanatyam company with structured training for all levels", desc:"A professional Bharatanatyam company in Basavanagudi offering structured training from beginner to performance level. Two professional dance studios and regular stage productions.", tags:["Bharatanatyam","Training","Professional Company","Basavanagudi"], link:"https://abhinava.dance"},
+  {id:'a13', layer:'active', name:"Natyashala (Indiranagar)",  category:"performance", era:"Active · training",          location:"Indiranagar, East Bengaluru",       lat:12.9784, lng:77.6408, short:"Active Bharatanatyam and folk dance school in Indiranagar",               desc:"One of several active classical and folk dance training schools in Indiranagar. Offers Bharatanatyam, folk dance forms including Dollu Kunitha, and stage production training for students of all ages.", tags:["Bharatanatyam","Folk Dance","Training","Indiranagar"]},
+  // ── MUSIC ────────────────────────────────────────────
+  {id:'a14', layer:'active', name:"Rama Seva Mandali",         category:"music",      era:"Active · annual concerts",   location:"Malleshwaram, West Bengaluru",      lat:13.0080, lng:77.5696, short:"65+ years of continuous month-long Carnatic concerts every Ramanavami",    desc:"The Rama Seva Mandali in Malleshwaram has held continuous month-long Carnatic music concerts every Ramanavami season for over 65 years — one of the longest-running classical music programmes in India.", tags:["Carnatic","Ramanavami","65+ Years","Malleshwaram"]},
+  {id:'a15', layer:'active', name:"Bangalore Gayana Samaja",   category:"music",      era:"Active · regular concerts",  location:"Kalasipalya, Central Bengaluru",    lat:12.9661, lng:77.5688, short:"100-year-old music society — Carnatic and Bhavageethe concerts",            desc:"Established over a century ago, one of the oldest music organisations in the city. Hosts regular Carnatic concerts and is one of the primary institutional patrons of Bhavageethe performance in Bengaluru.", tags:["Carnatic","Bhavageethe","100+ Years","Music Society"]},
+  {id:'a16', layer:'active', name:"Bharatiya Vidya Bhavan",    category:"music",      era:"Active · training, 1951",    location:"Race Course Road, Central Bengaluru",lat:12.9855, lng:77.5688, short:"Training in Carnatic vocal, Bharatanatyam and classical arts since 1951",    desc:"One of the oldest continuously active classical arts institutions in the city. Offers structured training in Carnatic music, Bharatanatyam, and Hindustani classical. Part of the national Bhavan network.", tags:["Carnatic","Bharatanatyam","Training","Since 1951"]},
+  {id:'a17', layer:'active', name:"Saptak School of Music",    category:"music",      era:"Active · training",          location:"Jayanagar, South Bengaluru",        lat:12.9256, lng:77.5836, short:"Active Carnatic vocal and instrumental training school in Jayanagar",       desc:"One of Bengaluru's well-established Carnatic music training institutions in South Bengaluru. Offers vocal and instrumental lessons from foundational Purandaradasa compositions upward, maintaining the city's Carnatic lineage.", tags:["Carnatic","Vocal Training","Instrumental","Jayanagar"]},
+  {id:'a18', layer:'active', name:"Swarasindhu Music Academy", category:"music",      era:"Active · training",          location:"Malleshwaram, West Bengaluru",      lat:13.0040, lng:77.5700, short:"Carnatic music school in the heart of Malleshwaram's music corridor",      desc:"Located in Malleshwaram — Bengaluru's traditional music heartland — Swarasindhu is one of several active Carnatic academies along this corridor offering vocal and veena training.", tags:["Carnatic","Veena","Vocal","Malleshwaram"]},
+  // ── VISUAL ART & CRAFT ───────────────────────────────
+  {id:'a19', layer:'active', name:"Karnataka Chitrakala Parishath", category:"visual", era:"Active · school + gallery", location:"Kumara Krupa Rd, Seshadripuram",    lat:12.9891, lng:77.5813, short:"Living art school + gallery — Mysore painting UG/PG programs",            desc:"The College of Fine Arts offers UG and PG degrees. Students actively revive Mysore painting, Tanjore painting, and Kasuti embroidery. Galleries open Tue–Sun with rotating exhibitions.", tags:["Art School","Mysore Painting","Active Galleries","UG/PG Programs"], link:"https://chitrakalaparishath.org"},
+  {id:'a20', layer:'active', name:"Venkatappa Art Gallery",    category:"visual",     era:"Active · permanent gallery", location:"Kasturba Rd, near Cubbon Park",      lat:12.9806, lng:77.5932, short:"Government gallery with permanent Karnataka and classical art collection",  desc:"Karnataka government's oldest fine arts museum, housing permanent collections of Karnataka paintings, sculptures and decorative arts. Hosts rotating temporary exhibitions of contemporary Karnataka artists alongside its classical collection.", tags:["Government Gallery","Karnataka Art","Permanent Collection","Cubbon Park"]},
+  {id:'a21', layer:'active', name:"1 Shanthi Road",            category:"visual",     era:"Active · residency + gallery",location:"Shanthi Road, near Gayatri Nagar",  lat:12.9730, lng:77.5600, short:"Artist residency studio and gallery — contemporary and experimental art",  desc:"1 Shanthi Road is Bengaluru's best-known independent artist residency and gallery, founded by Suresh Jayaram. Hosts international and local artists-in-residence alongside exhibitions, performances, and interdisciplinary events.", tags:["Artist Residency","Contemporary Art","Experimental","Independent Gallery"]},
+  // ── FOLK ART TRAINING ────────────────────────────────
+  {id:'a22', layer:'active', name:"Karnataka Janapada Trust",  category:"performance", era:"Active · folk preservation", location:"Near Shivananda Circle, Central",   lat:12.9820, lng:77.5810, short:"Active folk arts preservation body — Yakshagana, Dollu Kunitha training",  desc:"The Karnataka Janapada Trust actively works to document, preserve and transmit folk art forms including Yakshagana, Dollu Kunitha, Veeragase, and Pata Kunitha. Runs outreach training programmes and connects rural folk artists with urban audiences.", tags:["Yakshagana","Dollu Kunitha","Folk Preservation","Training"]},
+  {id:'a23', layer:'active', name:"Janapada Loka (active)",    category:"performance", era:"Active · live demos + festivals", location:"Bangalore–Mysore Hwy, nr. Ramanagara", lat:12.7200, lng:77.2760, short:"Living folk museum — artisan residencies, Yakshagana and Dollu Kunitha live", desc:"Beyond its 5,000-artifact collection, Janapada Loka hosts live artisan demonstrations, Yakshagana troupes, Dollu Kunitha performers, and annual folk festivals bringing together performers from across Karnataka.", tags:["Yakshagana","Dollu Kunitha","Live Demos","Folk Festivals"]},
+  // ── EXPERIMENTAL / CONTEMPORARY ──────────────────────
+  {id:'a24', layer:'active', name:"B-Flat Bar & Music Venue",  category:"music",      era:"Active · live music",        location:"Indiranagar 100 Feet Rd",           lat:12.9771, lng:77.6406, short:"Leading live music venue — jazz, fusion, Carnatic crossover, indie",         desc:"B-Flat on Indiranagar's 100 Feet Road is one of Bengaluru's top live music venues, hosting jazz, world music, Carnatic fusion, and indie performances weekly. A key part of the city's contemporary music scene where classical traditions meet modern forms.", tags:["Live Music","Jazz","Carnatic Fusion","Indiranagar"]},
+  {id:'a25', layer:'active', name:"Sandbox Collective",         category:"performance", era:"Active · contemporary theatre", location:"Various venues, city-wide",       lat:12.9700, lng:77.6100, short:"Contemporary theatre company pushing boundaries — experimental and new writing", desc:"One of Bengaluru's most active contemporary theatre companies, staging original works and new Indian writing across city venues. Known for experimental forms, multilingual productions, and inter-disciplinary collaborations connecting classical and contemporary practice.", tags:["Contemporary Theatre","New Writing","Experimental","City-wide"]},
+  {id:'a26', layer:'active', name:"Natya Institute of Kathak & Choreography", category:"performance", era:"Active · training", location:"Malleswaram, West Bengaluru",  lat:13.0050, lng:77.5680, short:"Government institute for Kathak and classical choreography training",     desc:"A government-supported institute in Malleshwaram offering structured Kathak and classical choreography training. One of the few institutions in South India offering professional Kathak training, maintaining a form with deep roots in the city.", tags:["Kathak","Choreography","Government Institute","Malleshwaram"]},
+  {id:'a27', layer:'active', name:"The Humming Tree",           category:"music",      era:"Active · live music",        location:"12th Main, Indiranagar",            lat:12.9771, lng:77.6380, short:"Premier indie music venue — live bands, folk fusion, world music",           desc:"One of Bengaluru's most respected intimate live music venues on the 3rd floor in Indiranagar. Hosts indie bands, folk fusion, world music, and Carnatic crossover performances — a key node in the city's contemporary music ecosystem.", tags:["Live Music","Folk Fusion","Indie","Indiranagar"]},
+  {id:'a28', layer:'active', name:"Hasiru Dala Innovation Lab (Craft hub)", category:"craft", era:"Active · craft revival", location:"Shivajinagar, Central Bengaluru", lat:12.9847, lng:77.6011, short:"Active craft revival hub — Kasuti, handloom, folk textile workshops",       desc:"An active urban craft hub running workshops in Kasuti embroidery, Karnataka handloom, and folk textile traditions. Works with artisan communities to keep traditional crafts commercially viable in the modern economy.", tags:["Kasuti","Handloom","Craft Workshops","Artisan Revival"]},
+];
+
+// ── Leaflet init ───────────────────────────────────────
+const map = L.map('map', { zoomControl:true }).setView([12.9716, 77.5946], 12);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom:19,
+  attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+}).addTo(map);
+
+let activeFilter = 'all';
+let activeLayer  = 'origins';
+let selectedId   = null;
+const markerIndex = {};
+
+// ── Icon factories ─────────────────────────────────────
+function originIcon(d, sel) {
+  const m = CAT[d.category];
+  const sz = sel ? 38 : 28, fs = sel ? '1rem' : '0.8rem', bw = sel ? '3px' : '2.5px';
+  return L.divIcon({
+    className:'', iconSize:[sz,sz], iconAnchor:[sz/2,sz+8], popupAnchor:[0,-(sz+8)],
+    html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${m.color};display:flex;align-items:center;justify-content:center;font-size:${fs};border:${bw} solid white;box-shadow:0 2px 10px rgba(0,0,0,0.3);position:relative;cursor:pointer;">${m.emoji}<span style="position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid ${m.color};"></span></div>`
+  });
+}
+
+function activeIcon(d, sel) {
+  const sz = sel ? 30 : 22, fs = sel ? '0.75rem' : '0.6rem';
+  const m = CAT[d.category];
+  return L.divIcon({
+    className:'', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2], popupAnchor:[0,-(sz/2+4)],
+    html:`<div style="width:${sz}px;height:${sz}px;border-radius:3px;transform:rotate(45deg);background:#1a6644;border:${sel?'3px':'2px'} solid white;box-shadow:0 2px 10px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="transform:rotate(-45deg);font-size:${fs}">${m.emoji}</span></div>`
+  });
+}
+
+function popupHtml(d) {
+  const isA = d.layer==='active';
+  return `<div class="pop-inner">
+    <div class="pop-layer" style="color:${isA?'#5dba90':'rgba(245,239,227,0.4)'}">${isA?'● Active Today':'◉ Origin / Heritage'}</div>
+    <div class="pop-cat">${d.category}</div>
+    <div class="pop-name">${d.name}</div>
+    <div class="pop-era">${d.era} · ${d.location}</div>
+    <div class="pop-desc">${d.short}</div>
+  </div>`;
+}
+
+// ── Create markers ─────────────────────────────────────
+function createMarkers() {
+  [...ORIGINS,...ACTIVE].forEach(d => {
+    const icon = d.layer==='active' ? activeIcon(d,false) : originIcon(d,false);
+    const m = L.marker([d.lat,d.lng],{icon});
+    m.bindPopup(popupHtml(d),{maxWidth:260});
+    m.on('click',()=>selectEntry(d.id));
+    markerIndex[d.id] = m;
+  });
+}
+
+function syncMarkers() {
+  const showO = activeLayer==='origins'||activeLayer==='both';
+  const showA = activeLayer==='active' ||activeLayer==='both';
+  [...ORIGINS,...ACTIVE].forEach(d => {
+    const mk = markerIndex[d.id]; if(!mk) return;
+    const layerOk = d.layer==='origin' ? showO : showA;
+    const catOk   = activeFilter==='all' || d.category===activeFilter;
+    if(layerOk && catOk) { if(!map.hasLayer(mk)) mk.addTo(map); }
+    else                  { if(map.hasLayer(mk))  map.removeLayer(mk); }
+  });
+}
+
+// ── Sidebar ────────────────────────────────────────────
+function renderEntries() {
+  const showO = activeLayer==='origins'||activeLayer==='both';
+  const showA = activeLayer==='active' ||activeLayer==='both';
+  let html='', total=0;
+
+  if(showO) {
+    const f=ORIGINS.filter(d=>activeFilter==='all'||d.category===activeFilter);
+    total+=f.length;
+    if(f.length) {
+      html+=`<div class="list-section-hd"><span class="sdot" style="background:#c9631e"></span>Art Origins · Heritage Sites (${f.length})</div>`;
+      html+=f.map(d=>cardHtml(d)).join('');
+    }
+  }
+  if(showA) {
+    const f=ACTIVE.filter(d=>activeFilter==='all'||d.category===activeFilter);
+    total+=f.length;
+    if(f.length) {
+      html+=`<div class="list-section-hd"><span class="sdot" style="background:#1a6644"></span>Active Today · Training &amp; Performance (${f.length})</div>`;
+      html+=f.map(d=>cardHtml(d)).join('');
+    }
+  }
+
+  document.getElementById('entries-list').innerHTML = html || '<div style="padding:18px 14px;font-size:0.76rem;color:var(--muted)">No entries for this filter.</div>';
+  document.getElementById('count-lbl').textContent = `${total} entries shown`;
+}
+
+function cardHtml(d) {
+  const m=CAT[d.category], isA=d.layer==='active';
+  return `<div class="entry-card${selectedId===d.id?' selected':''}${isA?' av':''}" onclick="selectEntry('${d.id}')">
+    <div class="entry-icon" style="background:${m.bg}">${m.emoji}</div>
+    <div class="entry-meta">
+      <div class="entry-name">${d.name}</div>
+      <div class="entry-type">${d.category}</div>
+      <div class="entry-era" style="color:${isA?'#1a6644':'#c9631e'}">${d.era}</div>
+    </div></div>`;
+}
+
+// ── Select ─────────────────────────────────────────────
+function selectEntry(id) {
+  if(selectedId) {
+    const prev=[...ORIGINS,...ACTIVE].find(x=>x.id===selectedId);
+    if(prev&&markerIndex[prev.id]) {
+      markerIndex[prev.id].setIcon(prev.layer==='active'?activeIcon(prev,false):originIcon(prev,false));
+      markerIndex[prev.id].closePopup();
+    }
+  }
+  selectedId = selectedId===id ? null : id;
+  if(selectedId) {
+    const d=[...ORIGINS,...ACTIVE].find(x=>x.id===id); if(!d) return;
+    markerIndex[id].setIcon(d.layer==='active'?activeIcon(d,true):originIcon(d,true));
+    markerIndex[id].openPopup();
+    map.panTo([d.lat,d.lng],{animate:true,duration:0.5});
+    renderDetail(d);
+    setTimeout(()=>{
+      const card=document.querySelector(`.entry-card[onclick*="'${id}'"]`);
+      if(card) card.scrollIntoView({behavior:'smooth',block:'nearest'});
+    },60);
+  } else { closeDetail(); }
+  renderEntries();
+}
+
+function renderDetail(d) {
+  const m=CAT[d.category], isA=d.layer==='active';
+  const ac=isA?'#1a6644':m.color, ab=isA?'#d4ede2':m.bg;
+  document.getElementById('detail-inner').innerHTML=`
+    <button class="close-btn" onclick="closeDetail()">✕</button>
+    <div class="d-cat" style="background:${ab};color:${ac}">${isA?'● Active Today':'◉ Heritage'} · ${d.category}</div>
+    <div class="d-title">${d.name}</div>
+    <div class="d-meta"><span>🕰 <b>${d.era}</b></span><span>📍 <b>${d.location}</b></span></div>
+    <div class="d-desc">${d.desc}</div>
+    <div class="d-tags">${d.tags.map(t=>`<span class="d-tag">${t}</span>`).join('')}</div>
+    ${d.link?`<a class="d-link" href="${d.link}" target="_blank">Visit website ↗</a>`:''}`;
+  document.getElementById('detail-panel').classList.add('open');
+}
+
+function closeDetail() {
+  if(selectedId) {
+    const prev=[...ORIGINS,...ACTIVE].find(x=>x.id===selectedId);
+    if(prev&&markerIndex[prev.id]) {
+      markerIndex[prev.id].setIcon(prev.layer==='active'?activeIcon(prev,false):originIcon(prev,false));
+      markerIndex[prev.id].closePopup();
+    }
+  }
+  selectedId=null;
+  document.getElementById('detail-panel').classList.remove('open');
+  renderEntries();
+}
+
+function setLayer(l) {
+  activeLayer=l;
+  document.querySelectorAll('.ltog').forEach(e=>e.classList.remove('active'));
+  document.getElementById('ltog-'+l).classList.add('active');
+  closeDetail(); syncMarkers(); renderEntries();
+}
+
+function filterBy(f,el) {
+  activeFilter=f;
+  document.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  closeDetail(); syncMarkers(); renderEntries();
+}
+
+map.on('click',()=>{ if(selectedId) closeDetail(); });
+
+createMarkers();
+syncMarkers();
+renderEntries();
+</script>
+</body>
+</html>
