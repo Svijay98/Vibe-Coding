@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Air Raga — Dual Hand Instrument</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07070f;--s1:#0f0f1d;--s2:#17172a;--s3:#1f1f37;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.15);
+  --green:#00e5a0;--blue:#4d9fff;--amber:#f5a623;--red:#ff6b6b;--purple:#c084fc;
+  --text:#eeeef5;--muted:#6b6b80;--dim:#2a2a3a;
+  --font-mono:'Space Mono',monospace;--font:'DM Sans',sans-serif;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(ellipse 60% 45% at 10% 0%, rgba(0,229,160,0.05) 0%,transparent 60%),
+    radial-gradient(ellipse 55% 40% at 90% 100%,rgba(245,166,35,0.05) 0%,transparent 60%),
+    radial-gradient(ellipse 40% 35% at 50% 50%, rgba(77,159,255,0.03) 0%,transparent 70%);
+}
+.app{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:18px 16px 48px;display:flex;flex-direction:column;gap:14px}
+
+/* HEADER */
+.hdr{display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.hdr-left{display:flex;flex-direction:column;gap:3px}
+.hdr-tag{font-family:var(--font-mono);font-size:10px;color:var(--amber);letter-spacing:3px;text-transform:uppercase}
+.hdr-title{font-size:26px;font-weight:300;letter-spacing:-0.3px}
+.hdr-title .g{color:var(--green);font-weight:500}
+.hdr-title .a{color:var(--amber);font-weight:500}
+.pills{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.pill{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:var(--s1);font-size:11px;font-family:var(--font-mono);color:var(--muted);transition:all .3s}
+.pill .led{width:6px;height:6px;border-radius:50%;background:var(--dim);transition:all .3s}
+.pill.on-cam{border-color:rgba(77,159,255,.3);color:var(--blue)}.pill.on-cam .led{background:var(--blue);box-shadow:0 0 6px var(--blue)}
+.pill.on-rh{border-color:rgba(0,229,160,.3);color:var(--green)}.pill.on-rh .led{background:var(--green);box-shadow:0 0 6px var(--green)}
+.pill.on-lh{border-color:rgba(245,166,35,.3);color:var(--amber)}.pill.on-lh .led{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+
+/* CAMERA */
+.cam-wrap{position:relative;border-radius:14px;overflow:hidden;background:#04040c;border:1px solid var(--border);width:100%;aspect-ratio:16/9;max-height:440px}
+#video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1)}
+#canvas{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1)}
+.cam-over{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--muted);font-size:13px;font-family:var(--font-mono)}
+.cam-icon{width:52px;height:52px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:22px}
+
+/* TWO-PANEL */
+.two-panel{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:680px){.two-panel{grid-template-columns:1fr}}
+
+.panel{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.panel.right-panel{border-color:rgba(0,229,160,0.15)}
+.panel.left-panel{border-color:rgba(245,166,35,0.15)}
+.panel-title{font-size:10px;font-family:var(--font-mono);letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.panel-title .hand-tag{padding:2px 8px;border-radius:999px;font-size:10px}
+.rh-tag{background:rgba(0,229,160,.1);color:var(--green);border:1px solid rgba(0,229,160,.2)}
+.lh-tag{background:rgba(245,166,35,.1);color:var(--amber);border:1px solid rgba(245,166,35,.2)}
+
+/* NOTE / DRUM DISPLAY */
+.note-big{font-family:var(--font-mono);font-size:52px;font-weight:700;line-height:1;color:var(--green);text-shadow:0 0 24px rgba(0,229,160,.4);transition:all .1s}
+.note-big.off{color:var(--dim);text-shadow:none}
+.drum-big{font-family:var(--font-mono);font-size:32px;font-weight:700;line-height:1;color:var(--amber);text-shadow:0 0 20px rgba(245,166,35,.4);min-height:40px;transition:all .1s}
+.drum-big.off{color:var(--dim);text-shadow:none}
+.sub-text{font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:5px;min-height:15px}
+
+/* WAVEFORM */
+.waveform{display:flex;gap:3px;align-items:center;height:20px;margin-top:8px}
+.wbar{width:3px;border-radius:2px;opacity:.18;transition:height .08s,opacity .12s}
+.wbar.g{background:var(--green)}
+.wbar.a{background:var(--amber)}
+
+/* DRUM PADS DISPLAY */
+.drum-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.drum-pad{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;transition:all .12s;cursor:pointer}
+.drum-pad .pad-name{font-size:10px;font-family:var(--font-mono);color:var(--muted)}
+.drum-pad .pad-key{font-size:9px;color:var(--dim);margin-top:2px;font-family:var(--font-mono)}
+.drum-pad.hit{background:rgba(245,166,35,.18);border-color:var(--amber);box-shadow:0 0 10px rgba(245,166,35,.2) inset}
+.drum-pad.hit .pad-name{color:var(--amber)}
+
+/* INSTRUMENT SWITCHER */
+.inst-row{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.inst-btn{padding:5px 12px;border-radius:999px;border:1px solid var(--border);background:var(--s2);color:var(--muted);font-size:11px;font-family:var(--font-mono);cursor:pointer;transition:all .2s}
+.inst-btn:hover{border-color:var(--border2);color:var(--text)}
+.inst-btn.active{border-color:rgba(0,229,160,.4);background:rgba(0,229,160,.08);color:var(--green)}
+
+/* PIANO KEYS */
+.piano-row{display:flex;gap:3px;height:60px;align-items:flex-end;margin-top:10px}
+.key{flex:1;background:var(--s2);border:1px solid var(--border);border-radius:0 0 5px 5px;cursor:pointer;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding-bottom:5px;transition:all .07s;position:relative}
+.key:hover{background:var(--s3)}
+.key-label{font-size:9px;font-family:var(--font-mono);color:var(--muted)}
+.key.lit{background:rgba(0,229,160,.18);border-color:var(--green)}
+.key.lit .key-label{color:var(--green)}
+.key .fbadge{position:absolute;top:4px;font-size:8px;font-family:var(--font-mono);color:var(--dim)}
+
+/* CONTROLS ROW */
+.ctrl-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.ctrl-group{display:flex;flex-direction:column;gap:3px;min-width:100px}
+.ctrl-label{font-size:10px;color:var(--muted);font-family:var(--font-mono)}
+.ctrl-val{font-size:10px;font-family:var(--font-mono);color:var(--text)}
+input[type=range]{width:100%;appearance:none;height:3px;border-radius:2px;background:var(--s2);outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;border-radius:50%;cursor:pointer}
+input.g::-webkit-slider-thumb{background:var(--green);box-shadow:0 0 5px rgba(0,229,160,.5)}
+input.a::-webkit-slider-thumb{background:var(--amber);box-shadow:0 0 5px rgba(245,166,35,.5)}
+input.b::-webkit-slider-thumb{background:var(--blue);box-shadow:0 0 5px rgba(77,159,255,.5)}
+.oct-row{display:flex;align-items:center;gap:6px}
+.oct-btn{width:24px;height:24px;border-radius:5px;background:var(--s2);border:1px solid var(--border);color:var(--text);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.oct-btn:hover{background:var(--s3)}
+.oct-num{font-family:var(--font-mono);font-size:14px;min-width:12px;text-align:center}
+#start-btn{padding:9px 22px;border-radius:8px;border:1px solid var(--blue);background:rgba(77,159,255,.07);color:var(--blue);font-family:var(--font-mono);font-size:12px;cursor:pointer;letter-spacing:1px;transition:all .2s;white-space:nowrap}
+#start-btn:hover{background:rgba(77,159,255,.14)}
+#start-btn.stop{border-color:var(--red);background:rgba(255,107,107,.07);color:var(--red)}
+#start-btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* GESTURE GUIDE */
+.guide-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:600px){.guide-grid{grid-template-columns:1fr}}
+.guide-card{background:var(--s2);border-radius:8px;padding:10px 12px}
+.guide-card h4{font-size:11px;font-weight:500;margin-bottom:6px;font-family:var(--font-mono)}
+.guide-card h4.g{color:var(--green)}.guide-card h4.a{color:var(--amber)}
+.guide-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:5px}
+.gicon{font-size:14px;width:20px;flex-shrink:0}
+.gtext{font-size:11px;color:var(--muted);line-height:1.5}
+.gtext strong{color:var(--text);font-weight:500}
+
+.section-title{font-size:10px;font-family:var(--font-mono);letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:10px}
+.card{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-left">
+    <span class="hdr-tag">Dual Hand Instrument</span>
+    <h1 class="hdr-title">Air <span class="g">Strings</span> + <span class="a">Tabla</span></h1>
+  </div>
+  <div class="pills">
+    <div class="pill" id="pill-cam"><span class="led"></span>camera</div>
+    <div class="pill" id="pill-rh"><span class="led"></span>right: melody</div>
+    <div class="pill" id="pill-lh"><span class="led"></span>left: drums</div>
+  </div>
+</div>
+
+<!-- CAMERA -->
+<div class="cam-wrap">
+  <video id="video" autoplay muted playsinline></video>
+  <canvas id="canvas"></canvas>
+  <div class="cam-over" id="placeholder">
+    <div class="cam-icon">&#9711;</div>
+    <span>click start to begin</span>
+  </div>
+</div>
+
+<!-- CONTROLS -->
+<div class="card">
+  <div class="ctrl-bar">
+    <button id="start-btn" onclick="toggleCam()">&#9654; START CAMERA</button>
+    <div class="ctrl-group">
+      <span class="ctrl-label">Master vol &nbsp;<span class="ctrl-val" id="v-master">70%</span></span>
+      <input type="range" class="b" min="0" max="100" value="70" oninput="setMaster(this.value)"/>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">Melody vol &nbsp;<span class="ctrl-val" id="v-mel">80%</span></span>
+      <input type="range" class="g" min="0" max="100" value="80" oninput="setMelVol(this.value)"/>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">Drum vol &nbsp;<span class="ctrl-val" id="v-drum">85%</span></span>
+      <input type="range" class="a" min="0" max="100" value="85" oninput="setDrumVol(this.value)"/>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">Reverb &nbsp;<span class="ctrl-val" id="v-rev">30%</span></span>
+      <input type="range" class="b" min="0" max="100" value="30" oninput="setRev(this.value)"/>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">Octave</span>
+      <div class="oct-row">
+        <button class="oct-btn" onclick="changeOct(-1)">&#8722;</button>
+        <span class="oct-num" id="oct-val">4</span>
+        <button class="oct-btn" onclick="changeOct(1)">+</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TWO PANEL -->
+<div class="two-panel">
+
+  <!-- RIGHT: MELODY -->
+  <div class="panel right-panel">
+    <div class="panel-title">
+      <span>Melody</span><span class="hand-tag rh-tag">RIGHT HAND</span>
+    </div>
+    <div class="inst-row">
+      <button class="inst-btn active" id="ibtn-sitar" onclick="setInst('sitar')">&#9835; Sitar</button>
+      <button class="inst-btn" id="ibtn-violin" onclick="setInst('violin')">&#9836; Violin</button>
+      <button class="inst-btn" id="ibtn-synth" onclick="setInst('synth')">&#9641; Synth</button>
+    </div>
+    <div class="note-big off" id="note-display">&#8212;</div>
+    <div class="sub-text" id="note-sub">raise fingers on right hand</div>
+    <div class="waveform" id="mel-wave">
+      <div class="wbar g" style="height:5px"></div><div class="wbar g" style="height:10px"></div>
+      <div class="wbar g" style="height:16px"></div><div class="wbar g" style="height:12px"></div>
+      <div class="wbar g" style="height:7px"></div><div class="wbar g" style="height:14px"></div>
+      <div class="wbar g" style="height:9px"></div><div class="wbar g" style="height:18px"></div>
+      <div class="wbar g" style="height:11px"></div><div class="wbar g" style="height:5px"></div>
+    </div>
+    <div class="piano-row" id="piano-keys"></div>
+  </div>
+
+  <!-- LEFT: DRUMS -->
+  <div class="panel left-panel">
+    <div class="panel-title">
+      <span>Percussion</span><span class="hand-tag lh-tag">LEFT HAND</span>
+    </div>
+    <div class="drum-big off" id="drum-display">&#8212;</div>
+    <div class="sub-text" id="drum-sub">raise fingers on left hand</div>
+    <div class="waveform" id="drum-wave">
+      <div class="wbar a" style="height:5px"></div><div class="wbar a" style="height:10px"></div>
+      <div class="wbar a" style="height:16px"></div><div class="wbar a" style="height:12px"></div>
+      <div class="wbar a" style="height:7px"></div><div class="wbar a" style="height:14px"></div>
+      <div class="wbar a" style="height:9px"></div><div class="wbar a" style="height:18px"></div>
+      <div class="wbar a" style="height:11px"></div><div class="wbar a" style="height:5px"></div>
+    </div>
+    <div class="drum-grid" id="drum-grid"></div>
+  </div>
+
+</div>
+
+<!-- GUIDE -->
+<div class="card">
+  <div class="section-title">Gesture Guide</div>
+  <div class="guide-grid">
+    <div class="guide-card">
+      <h4 class="g">&#9835; Right Hand — Melody</h4>
+      <div class="guide-row"><span class="gicon">1&#x20E3;</span><span class="gtext"><strong>1 finger</strong> = Sa (C)</span></div>
+      <div class="guide-row"><span class="gicon">2&#x20E3;</span><span class="gtext"><strong>2 fingers</strong> = Re (D)</span></div>
+      <div class="guide-row"><span class="gicon">3&#x20E3;</span><span class="gtext"><strong>3 fingers</strong> = Ga (E)</span></div>
+      <div class="guide-row"><span class="gicon">4&#x20E3;</span><span class="gtext"><strong>4 fingers</strong> = Ma (F)</span></div>
+      <div class="guide-row"><span class="gicon">5&#x20E3;</span><span class="gtext"><strong>5 fingers</strong> = Pa (G)</span></div>
+      <div class="guide-row"><span class="gicon">&#8679;</span><span class="gtext"><strong>Hand height</strong> = octave shift (low/mid/high)</span></div>
+      <div class="guide-row"><span class="gicon">&#8596;</span><span class="gtext"><strong>Combos</strong>: idx+mid=Dha(A), mid+ring=Ni(B)</span></div>
+    </div>
+    <div class="guide-card">
+      <h4 class="a">&#9836; Left Hand — Drums</h4>
+      <div class="guide-row"><span class="gicon">1&#x20E3;</span><span class="gtext"><strong>Index</strong> = Tabla Dha (low)</span></div>
+      <div class="guide-row"><span class="gicon">2&#x20E3;</span><span class="gtext"><strong>Middle</strong> = Tabla Tin (high snap)</span></div>
+      <div class="guide-row"><span class="gicon">3&#x20E3;</span><span class="gtext"><strong>Ring</strong> = Mridangam Thom</span></div>
+      <div class="guide-row"><span class="gicon">4&#x20E3;</span><span class="gtext"><strong>Pinky</strong> = Kick drum</span></div>
+      <div class="guide-row"><span class="gicon">5&#x20E3;</span><span class="gtext"><strong>Thumb</strong> = Hi-hat / Kanjira snap</span></div>
+      <div class="guide-row"><span class="gicon">&#10038;</span><span class="gtext"><strong>Combos</strong>: idx+mid=Clap, ring+pinky=Dhol boom, all=Full hit</span></div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script>
+/* ================================================================
+   AUDIO CONTEXT
+================================================================ */
+let AC=null,masterG=null,melG=null,drumG=null,dryG=null,revG=null,conv=null;
+let melVol=0.8,drumVol=0.85;
+
+function initAudio(){
+  if(AC)return;
+  AC=new(window.AudioContext||window.webkitAudioContext)();
+  masterG=AC.createGain(); masterG.gain.value=0.7;
+  melG=AC.createGain();  melG.gain.value=melVol;
+  drumG=AC.createGain(); drumG.gain.value=drumVol;
+  dryG=AC.createGain();  dryG.gain.value=0.7;
+  revG=AC.createGain();  revG.gain.value=0.3;
+  conv=AC.createConvolver();
+  const len=AC.sampleRate*2.8;
+  const buf=AC.createBuffer(2,len,AC.sampleRate);
+  for(let c=0;c<2;c++){const d=buf.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,1.9);}
+  conv.buffer=buf;
+  melG.connect(dryG); drumG.connect(dryG);
+  melG.connect(revG); drumG.connect(revG);
+  dryG.connect(masterG); revG.connect(conv); conv.connect(masterG);
+  masterG.connect(AC.destination);
+}
+
+/* ================================================================
+   MELODY SYNTHESISERS
+================================================================ */
+const SEMIS={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+function nFreq(n,o){return 440*Math.pow(2,((o+1)*12+SEMIS[n]-69)/12);}
+
+let curInst='sitar';
+
+// Karplus-Strong inspired pluck for sitar
+function playSitar(freq,vel,dur){
+  const bufLen=Math.round(AC.sampleRate/freq);
+  const buf=AC.createBuffer(1,bufLen,AC.sampleRate);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<bufLen;i++)d[i]=(Math.random()*2-1);
+  const src=AC.createBufferSource(); src.buffer=buf; src.loop=true;
+  // Low-pass filter for string decay
+  const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=freq*6; lp.Q.value=0.7;
+  const env=AC.createGain();
+  const t=AC.currentTime;
+  env.gain.setValueAtTime(vel*0.8,t);
+  env.gain.exponentialRampToValueAtTime(vel*0.4,t+0.05);
+  env.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  // Slight pitch wobble (sympathetic strings)
+  src.playbackRate.setValueAtTime(1,t);
+  src.playbackRate.linearRampToValueAtTime(1.002,t+0.01);
+  src.playbackRate.linearRampToValueAtTime(0.999,t+0.03);
+  src.connect(lp); lp.connect(env); env.connect(melG);
+  src.start(t); src.stop(t+dur+0.05);
+  // Twang partial
+  const osc=AC.createOscillator(); osc.type='sawtooth'; osc.frequency.value=freq;
+  const og=AC.createGain(); og.gain.setValueAtTime(vel*0.18,t); og.gain.exponentialRampToValueAtTime(0.001,t+0.12);
+  const lp2=AC.createBiquadFilter(); lp2.type='bandpass'; lp2.frequency.value=freq*2; lp2.Q.value=3;
+  osc.connect(lp2); lp2.connect(og); og.connect(melG);
+  osc.start(t); osc.stop(t+0.15);
+}
+
+function playViolin(freq,vel,dur){
+  const t=AC.currentTime;
+  const env=AC.createGain();
+  env.gain.setValueAtTime(0,t);
+  env.gain.linearRampToValueAtTime(vel*0.6,t+0.08); // bow attack
+  env.gain.setValueAtTime(vel*0.55,t+dur*0.7);
+  env.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  // Sawtooth + vibrato
+  const osc=AC.createOscillator(); osc.type='sawtooth'; osc.frequency.value=freq;
+  // Vibrato LFO
+  const lfo=AC.createOscillator(); lfo.type='sine'; lfo.frequency.value=5.5;
+  const lfoG=AC.createGain(); lfoG.gain.setValueAtTime(0,t); lfoG.gain.linearRampToValueAtTime(freq*0.008,t+0.15);
+  lfo.connect(lfoG); lfoG.connect(osc.frequency);
+  const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=freq*5;
+  osc.connect(lp); lp.connect(env); env.connect(melG);
+  // Harmonics
+  [2,3].forEach((h,i)=>{
+    const ho=AC.createOscillator(); ho.type='sine'; ho.frequency.value=freq*h;
+    const hg=AC.createGain(); hg.gain.value=vel*[0.18,0.07][i];
+    ho.connect(hg); hg.connect(melG);
+    ho.start(t); ho.stop(t+dur+0.05);
+  });
+  osc.start(t); lfo.start(t); osc.stop(t+dur+0.05); lfo.stop(t+dur+0.05);
+}
+
+function playSynth(freq,vel,dur){
+  const t=AC.currentTime;
+  // Anirudh-style: detuned saws + sub
+  const env=AC.createGain();
+  env.gain.setValueAtTime(0,t);
+  env.gain.linearRampToValueAtTime(vel*0.55,t+0.012);
+  env.gain.exponentialRampToValueAtTime(vel*0.2,t+0.3);
+  env.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  [0,-7,7,-14].forEach(det=>{
+    const o=AC.createOscillator(); o.type='sawtooth'; o.frequency.value=freq; o.detune.value=det;
+    const g=AC.createGain(); g.gain.value=0.25;
+    const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=800+vel*2000; lp.Q.value=2;
+    o.connect(lp); lp.connect(g); g.connect(env);
+    o.start(t); o.stop(t+dur+0.05);
+  });
+  // Sub sine
+  const sub=AC.createOscillator(); sub.type='sine'; sub.frequency.value=freq/2;
+  const sg=AC.createGain(); sg.gain.setValueAtTime(vel*0.3,t); sg.gain.exponentialRampToValueAtTime(0.001,t+dur*0.6);
+  sub.connect(sg); sg.connect(melG);
+  sub.start(t); sub.stop(t+dur+0.05);
+  env.connect(melG);
+}
+
+const melTimes={};
+function playMelody(note,oct,vel,dur){
+  if(!note)return;
+  initAudio();
+  const key=note+oct;
+  const now=AC.currentTime;
+  if(melTimes[key]&&now-melTimes[key]<0.14)return;
+  melTimes[key]=now;
+  vel=Math.min(1,Math.max(0.25,vel||0.65));
+  dur=Math.max(0.5,dur||1.4);
+  const f=nFreq(note,oct);
+  if(curInst==='sitar') playSitar(f,vel,dur);
+  else if(curInst==='violin') playViolin(f,vel,dur);
+  else playSynth(f,vel,dur);
+  animWave('mel-wave',vel);
+  flashKey(note);
+}
+
+/* ================================================================
+   DRUM SYNTHESISERS — Anirudh palette
+================================================================ */
+// Each drum is synthesised with Web Audio
+const drumTimes={};
+function drumDebounce(id){
+  const now=AC.currentTime;
+  if(drumTimes[id]&&now-drumTimes[id]<0.08)return false;
+  drumTimes[id]=now; return true;
+}
+
+// Tabla Dha — low resonant thump with tone
+function playTablaDha(vel){
+  if(!drumDebounce('dha'))return;
+  initAudio(); const t=AC.currentTime;
+  // Tonal body
+  const osc=AC.createOscillator(); osc.type='sine'; osc.frequency.setValueAtTime(180,t); osc.frequency.exponentialRampToValueAtTime(60,t+0.18);
+  const env=AC.createGain(); env.gain.setValueAtTime(vel*0.9,t); env.gain.exponentialRampToValueAtTime(0.001,t+0.35);
+  // Click transient
+  const ns=AC.createOscillator(); ns.type='triangle'; ns.frequency.value=500;
+  const ng=AC.createGain(); ng.gain.setValueAtTime(vel*0.5,t); ng.gain.exponentialRampToValueAtTime(0.001,t+0.04);
+  osc.connect(env); ns.connect(ng);
+  env.connect(drumG); ng.connect(drumG);
+  osc.start(t); osc.stop(t+0.4); ns.start(t); ns.stop(t+0.05);
+  hitPad('dha'); showDrum('Dha ♩','low tabla');
+}
+
+// Tabla Tin — high snappy
+function playTablaTin(vel){
+  if(!drumDebounce('tin'))return;
+  initAudio(); const t=AC.currentTime;
+  const osc=AC.createOscillator(); osc.type='sine'; osc.frequency.setValueAtTime(620,t); osc.frequency.exponentialRampToValueAtTime(300,t+0.08);
+  const env=AC.createGain(); env.gain.setValueAtTime(vel*0.75,t); env.gain.exponentialRampToValueAtTime(0.001,t+0.18);
+  const osc2=AC.createOscillator(); osc2.type='triangle'; osc2.frequency.value=900;
+  const eg2=AC.createGain(); eg2.gain.setValueAtTime(vel*0.3,t); eg2.gain.exponentialRampToValueAtTime(0.001,t+0.05);
+  osc.connect(env); osc2.connect(eg2);
+  env.connect(drumG); eg2.connect(drumG);
+  osc.start(t); osc.stop(t+0.22); osc2.start(t); osc2.stop(t+0.08);
+  hitPad('tin'); showDrum('Tin ♪','high tabla');
+}
+
+// Mridangam Thom — warm deep drum
+function playThom(vel){
+  if(!drumDebounce('thom'))return;
+  initAudio(); const t=AC.currentTime;
+  const osc=AC.createOscillator(); osc.type='sine'; osc.frequency.setValueAtTime(120,t); osc.frequency.exponentialRampToValueAtTime(45,t+0.25);
+  const env=AC.createGain(); env.gain.setValueAtTime(vel*0.95,t); env.gain.exponentialRampToValueAtTime(0.001,t+0.45);
+  // Mrid has a slight "chak" transient
+  const bufL=AC.sampleRate*0.03|0;
+  const nb=AC.createBuffer(1,bufL,AC.sampleRate);
+  const nd=nb.getChannelData(0); for(let i=0;i<bufL;i++) nd[i]=(Math.random()*2-1)*Math.pow(1-i/bufL,3);
+  const ns=AC.createBufferSource(); ns.buffer=nb;
+  const ng=AC.createGain(); ng.gain.value=vel*0.4;
+  ns.connect(ng); ng.connect(drumG);
+  osc.connect(env); env.connect(drumG);
+  osc.start(t); osc.stop(t+0.5); ns.start(t);
+  hitPad('thom'); showDrum('Thom ◉','mridangam');
+}
+
+// Kick — modern punchy 808-style
+function playKick(vel){
+  if(!drumDebounce('kick'))return;
+  initAudio(); const t=AC.currentTime;
+  const osc=AC.createOscillator(); osc.type='sine'; osc.frequency.setValueAtTime(220,t); osc.frequency.exponentialRampToValueAtTime(40,t+0.15);
+  const env=AC.createGain(); env.gain.setValueAtTime(vel,t); env.gain.exponentialRampToValueAtTime(0.001,t+0.5);
+  const click=AC.createOscillator(); click.type='square'; click.frequency.value=200;
+  const cg=AC.createGain(); cg.gain.setValueAtTime(vel*0.4,t); cg.gain.exponentialRampToValueAtTime(0.001,t+0.03);
+  osc.connect(env); click.connect(cg);
+  env.connect(drumG); cg.connect(drumG);
+  osc.start(t); osc.stop(t+0.55); click.start(t); click.stop(t+0.04);
+  hitPad('kick'); showDrum('Kick ◆','bass drum');
+}
+
+// Hi-hat / Kanjira — metallic sizzle
+function playHihat(vel){
+  if(!drumDebounce('hat'))return;
+  initAudio(); const t=AC.currentTime;
+  const bufL=AC.sampleRate*0.12|0;
+  const nb=AC.createBuffer(1,bufL,AC.sampleRate);
+  const nd=nb.getChannelData(0); for(let i=0;i<bufL;i++) nd[i]=(Math.random()*2-1)*Math.pow(1-i/bufL,4);
+  const ns=AC.createBufferSource(); ns.buffer=nb;
+  const hp=AC.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=8000;
+  const env=AC.createGain(); env.gain.setValueAtTime(vel*0.55,t); env.gain.exponentialRampToValueAtTime(0.001,t+0.08);
+  ns.connect(hp); hp.connect(env); env.connect(drumG);
+  ns.start(t);
+  hitPad('hat'); showDrum('Tss •','hi-hat');
+}
+
+// Clap (index+middle combo)
+function playClap(vel){
+  if(!drumDebounce('clap'))return;
+  initAudio(); const t=AC.currentTime;
+  [0,0.01,0.02].forEach(delay=>{
+    const bufL=AC.sampleRate*0.05|0;
+    const nb=AC.createBuffer(1,bufL,AC.sampleRate);
+    const nd=nb.getChannelData(0); for(let i=0;i<bufL;i++) nd[i]=(Math.random()*2-1)*Math.pow(1-i/bufL,5);
+    const ns=AC.createBufferSource(); ns.buffer=nb;
+    const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1200; bp.Q.value=0.8;
+    const env=AC.createGain(); env.gain.setValueAtTime(vel*0.7,t+delay); env.gain.exponentialRampToValueAtTime(0.001,t+delay+0.12);
+    ns.connect(bp); bp.connect(env); env.connect(drumG);
+    ns.start(t+delay);
+  });
+  hitPad('clap'); showDrum('Clap ★','layered clap');
+}
+
+// Dhol boom (ring+pinky)
+function playDhol(vel){
+  if(!drumDebounce('dhol'))return;
+  initAudio(); const t=AC.currentTime;
+  const osc=AC.createOscillator(); osc.type='sine'; osc.frequency.setValueAtTime(90,t); osc.frequency.exponentialRampToValueAtTime(35,t+0.3);
+  const env=AC.createGain(); env.gain.setValueAtTime(vel*0.95,t); env.gain.exponentialRampToValueAtTime(0.001,t+0.6);
+  const dist=AC.createWaveShaper();
+  const curve=new Float32Array(256);for(let i=0;i<256;i++){const x=i*2/256-1;curve[i]=x<0?-Math.pow(-x,.7):Math.pow(x,.7);}
+  dist.curve=curve;
+  osc.connect(dist); dist.connect(env); env.connect(drumG);
+  osc.start(t); osc.stop(t+0.65);
+  hitPad('dhol'); showDrum('Dhol ♦♦','dhol boom');
+}
+
+// Full combo hit
+function playFullHit(vel){
+  if(!drumDebounce('full'))return;
+  playTablaDha(vel*0.9);
+  setTimeout(()=>playKick(vel),10);
+  setTimeout(()=>playClap(vel*0.7),20);
+  showDrum('BOOM !!!','full combo');
+}
+
+/* ================================================================
+   DRUM PAD DEFINITIONS — finger → drum
+================================================================ */
+// Left hand finger bits: bit4=thumb, bit3=index, bit2=middle, bit1=ring, bit0=pinky
+const DRUM_MAP=[
+  {mask:0b01000, single:true,  id:'dha',  name:'Dha',    key:'Index',   fn:playTablaDha},
+  {mask:0b00100, single:true,  id:'tin',  name:'Tin',    key:'Middle',  fn:playTablaTin},
+  {mask:0b00010, single:true,  id:'thom', name:'Thom',   key:'Ring',    fn:playThom},
+  {mask:0b00001, single:true,  id:'kick', name:'Kick',   key:'Pinky',   fn:playKick},
+  {mask:0b10000, single:true,  id:'hat',  name:'Hi-hat', key:'Thumb',   fn:playHihat},
+  {mask:0b01100, single:false, id:'clap', name:'Clap',   key:'I+M',     fn:playClap},
+  {mask:0b00011, single:false, id:'dhol', name:'Dhol',   key:'R+P',     fn:playDhol},
+  {mask:0b11111, single:false, id:'full', name:'BOOM',   key:'All',     fn:playFullHit},
+];
+
+function buildDrumPads(){
+  const wrap=document.getElementById('drum-grid');
+  DRUM_MAP.forEach(d=>{
+    const div=document.createElement('div'); div.className='drum-pad'; div.id='pad-'+d.id;
+    div.innerHTML=`<div class="pad-name">${d.name}</div><div class="pad-key">${d.key}</div>`;
+    div.addEventListener('click',()=>{initAudio();d.fn(0.7);});
+    wrap.appendChild(div);
+  });
+}
+
+function hitPad(id){
+  const p=document.getElementById('pad-'+id); if(!p)return;
+  p.classList.add('hit'); clearTimeout(p._t); p._t=setTimeout(()=>p.classList.remove('hit'),250);
+}
+function showDrum(name,sub){
+  const el=document.getElementById('drum-display');
+  el.textContent=name; el.className='drum-big';
+  document.getElementById('drum-sub').textContent=sub;
+  clearTimeout(el._t); el._t=setTimeout(()=>{el.className='drum-big off'; el.textContent='—';document.getElementById('drum-sub').textContent='raise fingers on left hand';},1200);
+  animWave('drum-wave',0.8);
+}
+
+/* ================================================================
+   HAND TRACKING
+================================================================ */
+const SMOOTH=7;
+function mkBuf(v){ return Array(SMOOTH).fill(v); }
+const rhHBuf=mkBuf(0.5),lhHBuf=mkBuf(0.5);
+function smooth(buf,v){buf.push(v);if(buf.length>SMOOTH)buf.shift();return buf.reduce((a,b)=>a+b)/buf.length;}
+
+let rhPrev=null,lhPrev=null;
+const rhVelBuf=Array(5).fill(0), lhVelBuf=Array(5).fill(0);
+
+function getFingerMask(lm){
+  let mask=0;
+  if(Math.abs(lm[4].x-lm[2].x)>0.042) mask|=(1<<4);
+  const TIPS=[8,12,16,20],PIPS=[6,10,14,18],MCPS=[5,9,13,17];
+  TIPS.forEach((tip,i)=>{
+    if(lm[tip].y<lm[PIPS[i]].y-0.015&&lm[tip].y<lm[MCPS[i]].y) mask|=(1<<(3-i));
+  });
+  return mask;
+}
+function countBits(m){let n=0;for(let b=0;b<5;b++)if(m&(1<<b))n++;return n;}
+
+function getVel(lm,prevRef,velBuf){
+  const {x,y}=lm[0];
+  if(!prevRef.v){prevRef.v={x,y};return 0;}
+  const v=Math.hypot(x-prevRef.v.x,y-prevRef.v.y)*55;
+  prevRef.v={x,y};
+  velBuf.push(v);velBuf.shift();
+  return velBuf.reduce((a,b)=>a+b)/velBuf.length;
+}
+
+// Identify which hand is left / right using MediaPipe handedness
+let lastRHMask=-1, lastRHNote=null, lastRHTime=0;
+let lastLHMask=-1, lastLHTime=0;
+const rhRef={v:null}, lhRef={v:null};
+let octave=4;
+
+// Melody note map
+const MEL_SINGLE=[null,'C','D','E','F','G'];
+const MEL_COMBOS=[
+  [0b00110,'A',0,'Dha (A) — idx+mid'],
+  [0b01100,'B',0,'Ni (B) — mid+ring'],
+  [0b11000,'C',1,'Sa high — ring+pinky'],
+  [0b00111,'D',1,'Re high — 3 fingers'],
+  [0b01111,'G',1,'Pa high — 4 fingers'],
+  [0b11111,'C',2,'Sa very high — all 5'],
+];
+function matchMelCombo(mask){
+  for(const[m,n,s,desc]of MEL_COMBOS)if(mask===m)return{note:n,shift:s,desc};
+  return null;
+}
+
+function matchDrum(mask){
+  // Exact match, prefer combos over singles
+  const combos=DRUM_MAP.filter(d=>!d.single);
+  for(const d of combos) if(mask===d.mask)return d;
+  const singles=DRUM_MAP.filter(d=>d.single);
+  for(const d of singles) if(mask===d.mask)return d;
+  return null;
+}
+
+function processRH(lm,W,H,ctx){
+  const mask=getFingerMask(lm);
+  const count=countBits(mask);
+  const height=smooth(rhHBuf,1-lm[0].y);
+  const vel=getVel(lm,rhRef,rhVelBuf);
+  document.getElementById('pill-rh').className='pill on-rh';
+
+  const hShift=height>0.73?2:height>0.54?1:height<0.26?-1:0;
+  const safeOct=Math.max(2,Math.min(6,octave+hShift));
+
+  const combo=matchMelCombo(mask);
+  let noteToPlay=null,noteOct=safeOct;
+  if(combo){noteToPlay=combo.note;noteOct=Math.max(2,Math.min(6,octave+combo.shift));}
+  else if(count>=1&&count<=5)noteToPlay=MEL_SINGLE[count];
+
+  const nk=noteToPlay?noteToPlay+noteOct:null;
+  const now=AC?AC.currentTime:performance.now()/1000;
+  const maskChanged=mask!==lastRHMask, noteChanged=nk!==lastRHNote, timeOk=(now-lastRHTime)>0.16;
+
+  if(noteToPlay&&(maskChanged||noteChanged)&&timeOk){
+    const vs=Math.min(1,0.38+vel*3.2), ds=Math.max(0.55,1.5-vel*2);
+    playMelody(noteToPlay,noteOct,vs,ds*1.4);
+    lastRHTime=now;
+    document.getElementById('note-display').textContent=noteToPlay+noteOct;
+    document.getElementById('note-display').className='note-big';
+    document.getElementById('note-sub').textContent=combo?combo.desc:count+' finger'+(count>1?'s':'');
+  } else if(!noteToPlay){
+    document.getElementById('note-display').className='note-big off';
+    document.getElementById('note-display').textContent='—';
+    document.getElementById('note-sub').textContent='raise fingers on right hand';
+  }
+  lastRHMask=mask; lastRHNote=nk;
+
+  // Draw RH — green
+  drawHand(lm,W,H,ctx,'#00e5a0',mask,'R');
+  if(noteToPlay){
+    const wx=(1-lm[0].x)*W,wy=lm[0].y*H;
+    ctx.font='bold 18px Space Mono,monospace';
+    ctx.fillStyle='#00e5a0'; ctx.shadowColor='#00e5a0'; ctx.shadowBlur=10;
+    ctx.fillText(noteToPlay+noteOct,wx-10,wy-22); ctx.shadowBlur=0;
+  }
+}
+
+function processLH(lm,W,H,ctx){
+  const mask=getFingerMask(lm);
+  const vel=getVel(lm,lhRef,lhVelBuf);
+  document.getElementById('pill-lh').className='pill on-lh';
+
+  const now=AC?AC.currentTime:performance.now()/1000;
+  const maskChanged=mask!==lastLHMask, timeOk=(now-lastLHTime)>0.06;
+
+  if(mask>0&&maskChanged&&timeOk){
+    const drum=matchDrum(mask);
+    if(drum){
+      const v=Math.min(1,0.5+vel*2.5);
+      drum.fn(v);
+      lastLHTime=now;
+    }
+  }
+  lastLHMask=mask;
+
+  // Draw LH — amber
+  drawHand(lm,W,H,ctx,'#f5a623',mask,'L');
+}
+
+function drawHand(lm,W,H,ctx,color,mask,label){
+  if(typeof drawConnectors!=='undefined')
+    drawConnectors(ctx,lm,HAND_CONNECTIONS,{color:color+'55',lineWidth:2});
+  // Knuckle dots
+  [0,1,2,3,5,9,13,17].forEach(i=>{
+    const x=(1-lm[i].x)*W, y=lm[i].y*H;
+    ctx.beginPath(); ctx.arc(x,y,2.5,0,Math.PI*2);
+    ctx.fillStyle=color+'80'; ctx.fill();
+  });
+  // Fingertips
+  const TIPS=[{i:4,b:4},{i:8,b:3},{i:12,b:2},{i:16,b:1},{i:20,b:0}];
+  TIPS.forEach(({i,b})=>{
+    const up=!!(mask&(1<<b));
+    const x=(1-lm[i].x)*W, y=lm[i].y*H;
+    ctx.beginPath(); ctx.arc(x,y,up?7:4,0,Math.PI*2);
+    ctx.fillStyle=up?color:color+'33';
+    if(up){ctx.shadowColor=color; ctx.shadowBlur=12;}
+    ctx.fill(); ctx.shadowBlur=0;
+    if(up){
+      ctx.beginPath(); ctx.arc(x,y,11,0,Math.PI*2);
+      ctx.strokeStyle=color+'55'; ctx.lineWidth=1.5; ctx.stroke();
+    }
+  });
+  // Label badge
+  const wx=(1-lm[0].x)*W, wy=lm[0].y*H;
+  ctx.font='bold 11px Space Mono,monospace';
+  ctx.fillStyle=color; ctx.shadowColor=color; ctx.shadowBlur=6;
+  ctx.fillText(label,wx-4,wy+18); ctx.shadowBlur=0;
+}
+
+function onResults(results){
+  const video=document.getElementById('video');
+  const canvas=document.getElementById('canvas');
+  const ctx=canvas.getContext('2d');
+  canvas.width=video.videoWidth||1280; canvas.height=video.videoHeight||720;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const W=canvas.width, H=canvas.height;
+
+  const hands=results.multiHandLandmarks||[];
+  const handedness=results.multiHandedness||[];
+
+  let rhFound=false, lhFound=false;
+
+  hands.forEach((lm,idx)=>{
+    // MediaPipe labels from camera's POV — "Right" = user's left on mirrored feed
+    const label=handedness[idx]?.classification?.[0]?.label||'Right';
+    // Because video is mirrored, "Left" in MP = user's right hand
+    const isUserRight = label==='Left';
+    if(isUserRight){ processRH(lm,W,H,ctx); rhFound=true; }
+    else           { processLH(lm,W,H,ctx); lhFound=true; }
+  });
+
+  if(!rhFound){
+    document.getElementById('pill-rh').className='pill';
+    document.getElementById('note-display').className='note-big off';
+    document.getElementById('note-display').textContent='—';
+    document.getElementById('note-sub').textContent='raise fingers on right hand';
+    lastRHMask=-1; lastRHNote=null; rhRef.v=null;
+  }
+  if(!lhFound){
+    document.getElementById('pill-lh').className='pill';
+    lastLHMask=-1; lhRef.v=null;
+  }
+
+  // Height ruler (right hand height)
+}
+
+/* ================================================================
+   PIANO KEYS
+================================================================ */
+const PIANO=['C','D','E','F','G','A','B'];
+function buildPiano(){
+  const wrap=document.getElementById('piano-keys');
+  PIANO.forEach((n,i)=>{
+    const d=document.createElement('div'); d.className='key'; d.id='key-'+n;
+    d.innerHTML=`<span class="fbadge">${i+1<=5?i+1:''}</span><span class="key-label">${n}</span>`;
+    d.addEventListener('click',()=>{initAudio();playMelody(n,octave,0.65,1.4);});
+    wrap.appendChild(d);
+  });
+}
+function flashKey(note){
+  const k=document.getElementById('key-'+note); if(!k)return;
+  k.classList.add('lit'); clearTimeout(k._t); k._t=setTimeout(()=>k.classList.remove('lit'),320);
+}
+
+/* ================================================================
+   WAVEFORM ANIMATION
+================================================================ */
+function animWave(id,vel){
+  const bars=document.querySelectorAll('#'+id+' .wbar');
+  const base=[5,10,16,12,7,14,9,18,11,5];
+  bars.forEach((b,i)=>{
+    b.style.height=(base[i]*(0.35+vel*0.9))+'px';
+    b.style.opacity=0.2+vel*0.8;
+    setTimeout(()=>{b.style.height=(base[i]*0.3)+'px';b.style.opacity=0.15;},300+i*22);
+  });
+}
+
+/* ================================================================
+   CAMERA
+================================================================ */
+let camOn=false,mpCam=null;
+async function toggleCam(){
+  const btn=document.getElementById('start-btn');
+  const cp=document.getElementById('pill-cam');
+  if(camOn){
+    if(mpCam)mpCam.stop(); camOn=false;
+    btn.textContent='\u25B6 START CAMERA'; btn.classList.remove('stop');
+    cp.className='pill'; document.getElementById('pill-rh').className='pill'; document.getElementById('pill-lh').className='pill';
+    document.getElementById('placeholder').style.display='flex'; return;
+  }
+  btn.textContent='\u27F3 STARTING...'; btn.disabled=true;
+  try{
+    initAudio();
+    const video=document.getElementById('video');
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1280},height:{ideal:720}}});
+    video.srcObject=stream; await video.play();
+    document.getElementById('placeholder').style.display='none';
+
+    const hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+    hands.setOptions({maxNumHands:2,modelComplexity:1,minDetectionConfidence:0.8,minTrackingConfidence:0.7});
+    hands.onResults(onResults);
+
+    mpCam=new Camera(video,{onFrame:async()=>{await hands.send({image:video});},width:1280,height:720});
+    mpCam.start();
+    camOn=true; btn.textContent='\u25A0 STOP CAMERA'; btn.classList.add('stop'); btn.disabled=false;
+    cp.className='pill on-cam';
+  }catch(e){
+    btn.textContent='\u25B6 START CAMERA'; btn.disabled=false;
+    alert('Camera failed.\n\nTips:\n• Allow camera permissions\n• Use Chrome or Edge\n• No other app using camera');
+  }
+}
+
+/* ================================================================
+   CONTROLS
+================================================================ */
+function setInst(name){
+  curInst=name;
+  ['sitar','violin','synth'].forEach(i=>document.getElementById('ibtn-'+i).className='inst-btn'+(i===name?' active':''));
+}
+function changeOct(d){octave=Math.max(2,Math.min(6,octave+d));document.getElementById('oct-val').textContent=octave;}
+function setMaster(v){initAudio();masterG.gain.value=v/100;document.getElementById('v-master').textContent=v+'%';}
+function setMelVol(v){melVol=v/100;if(melG)melG.gain.value=melVol;document.getElementById('v-mel').textContent=v+'%';}
+function setDrumVol(v){drumVol=v/100;if(drumG)drumG.gain.value=drumVol;document.getElementById('v-drum').textContent=v+'%';}
+function setRev(v){document.getElementById('v-rev').textContent=v+'%';if(revG){revG.gain.value=v/100;dryG.gain.value=1-v/200;}}
+
+/* ================================================================
+   INIT
+================================================================ */
+buildPiano();
+buildDrumPads();
+</script>
+</body>
+</html>
